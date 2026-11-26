@@ -47,7 +47,17 @@ export const listPresets = () => call<{ items: Preset[] }>("/api/v1/policy/prese
 export const listJobs = () => call<{ items: Job[] }>("/api/v1/jobs").then((r) => r.items);
 export const getJob = (id: string) => call<Job>(`/api/v1/jobs/${encodeURIComponent(id)}`);
 export const getReport = (id: string) => call<Report>(`/api/v1/jobs/${encodeURIComponent(id)}/report`);
-export const getGraph = (id: string) => call<Graph>(`/api/v1/jobs/${encodeURIComponent(id)}/graph`);
+export const getGraph = (id: string) => call<Graph>(`/api/v1/jobs/${encodeURIComponent(id)}/graph`).then(keptApartPeople);
+
+/**
+ * A refused weak link between records that stronger evidence later joined is not a refused
+ * merge. Keep only pairs that ended as two different patients, counted once per patient pair.
+ */
+function keptApartPeople(g: Graph): Graph {
+  const apart = g.kept_apart.filter((k) => !(k.patient_a && k.patient_a === k.patient_b));
+  const people = new Set(apart.map((k) => [k.patient_a ?? `r${k.a}`, k.patient_b ?? `r${k.b}`].sort().join("|")));
+  return { ...g, kept_apart: apart, summary: { ...g.summary, kept_apart_pairs: people.size } };
+}
 export const listFiles = (id: string) =>
   call<{ items: ReleaseFile[] }>(`/api/v1/jobs/${encodeURIComponent(id)}/files`).then((r) => r.items);
 export const compareDoc = (id: string, path: string) =>
