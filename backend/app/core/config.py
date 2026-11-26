@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     queue_mode: Literal["inline", "redis"] = "inline"
     data_dir: Path = BACKEND_ROOT / ".data"
     datasets_dir: Path | None = None
+    presets_dir: Path = REPO_ROOT / "config" / "presets"
+    allow_originals: bool = False  # demo only: serve original files of server-side synthetic datasets
 
     # --- HTTP hardening
     cors_origins: str = "http://localhost:3000"
@@ -75,6 +77,8 @@ class Settings(BaseSettings):
             raise ValueError("auth cannot be disabled in production")
         if self.queue_mode == "redis" and not self.redis_url:
             raise ValueError("queue_mode=redis requires ANAMIKA_REDIS_URL")
+        if self.allow_originals and self.env == "production":
+            raise ValueError("original files may not be served in production")
         if self.env == "production" and not self.api_keys:
             raise ValueError("production requires at least one API key hash")
         return self

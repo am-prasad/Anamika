@@ -61,8 +61,18 @@ def _limits(settings: Settings):  # type: ignore[no-untyped-def]
     return apply
 
 
+def resolve_policy(settings: Settings, preset: str | None) -> Path | None:
+    """Path of a named preset in ``presets_dir`` (``None`` = repository default policy)."""
+    if not preset:
+        return None
+    path = (settings.presets_dir / f"{preset}.yaml").resolve()
+    if settings.presets_dir.resolve() not in path.parents or not path.is_file():
+        raise JobError("unknown_policy")
+    return path
+
+
 def run_pipeline(settings: Settings, input_dir: Path, output_dir: Path, work_dir: Path,
-                 secret: str) -> dict[str, Any]:
+                 secret: str, policy: Path | None = None, explain_dir: Path | None = None) -> dict[str, Any]:
     """Run the pipeline once; return ``{"exit_code", "seconds"}`` (output is discarded)."""
     output_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     tmp = work_dir / f"tmp-{output_dir.name}"
@@ -76,11 +86,14 @@ def run_pipeline(settings: Settings, input_dir: Path, output_dir: Path, work_dir
         "TMPDIR": str(tmp), "HOME": str(tmp),
         "PYTHONDONTWRITEBYTECODE": "1", "PYTHONHASHSEED": "0",
     }
+    if policy is not None:
+        env["ANAMIKA_POLICY"] = str(policy)
+    extra = ["--debug-spans", str(explain_dir)] if explain_dir is not None else []
     t0 = time.monotonic()
     try:
         proc = subprocess.run(
             [settings.pipeline_python, str(settings.pipeline_main), "--input", str(input_dir),
-             "--output", str(output_dir)],
+             "--output", str(output_dir), *extra],
             cwd=BACKEND_ROOT, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL, timeout=settings.job_timeout_s,
             preexec_fn=_limits(settings), close_fds=True)
@@ -107,14 +120,14 @@ def _summary(output_dir: Path) -> dict[str, Any]:
 
 
 def _verify(settings: Settings, paths: storage.JobPaths, input_dir: Path, secret: str,
-            rotated: str) -> dict[str, Any]:
+            rotated: str, policy: Path | None) -> tuple[dict[str, Any], Path]:
     from tools.determinism import file_hashes, pseudonyms
 
     base = file_hashes(paths.output)
     again = paths.work / "verify-same"
     other = paths.work / "verify-rotated"
-    r1 = run_pipeline(settings, input_dir, again, paths.work, secret)
-    r2 = run_pipeline(settings, input_dir, other, paths.work, rotated)
+    r1 = run_pipeline(settings, input_dir, again, paths.work, secret, policy)
+    r2 = run_pipeline(settings, input_dir, other, paths.work, rotated, policy)
     same = file_hashes(again)
     rot = file_hashes(other)
     p_base, p_rot = pseudonyms(paths.output), pseudonyms(other)
@@ -127,8 +140,22 @@ def _verify(settings: Settings, paths: storage.JobPaths, input_dir: Path, secret
                      "pseudonyms_reused": len(p_base & p_rot), "exit_code": r2["exit_code"]},
     }
     storage.wipe(again)
-    storage.wipe(other)
-    return result
+    return result, other
+
+
+def _utility(paths: storage.JobPaths, input_dir: Path, truth: Path) -> dict[str, Any]:
+    from tools.utility_check import check
+
+    res = check(paths.output, input_dir, truth, 0)
+    res.pop("worst_files", None)
+    return res
+
+
+def _attack(paths: storage.JobPaths, rotated: Path | None, input_dir: Path, truth: Path,
+            attacker: Path) -> dict[str, Any]:
+    from tools.attacker import run
+
+    return run(paths.output, rotated, input_dir, truth, attacker)
 
 
 def _leak_scan(paths: storage.JobPaths, input_dir: Path, truth: Path) -> dict[str, Any]:
@@ -139,11 +166,12 @@ def _leak_scan(paths: storage.JobPaths, input_dir: Path, truth: Path) -> dict[st
     return res
 
 
-def resolve_input(settings: Settings, job: dict[str, Any], paths: storage.JobPaths) -> tuple[Path, Path | None]:
-    """Input directory and optional answer key for a job."""
+def resolve_input(settings: Settings, job: dict[str, Any],
+                  paths: storage.JobPaths) -> tuple[Path, Path | None, Path | None]:
+    """Input directory, optional answer key and optional attacker folder for a job."""
     source = job["source"]
     if source == "upload":
-        return paths.input, None
+        return paths.input, None, None
     name = source.split(":", 1)[1]
     if settings.datasets_dir is None:
         raise JobError("dataset_unavailable")
@@ -151,7 +179,9 @@ def resolve_input(settings: Settings, job: dict[str, Any], paths: storage.JobPat
     if settings.datasets_dir.resolve() not in root.parents or not (root / "input").is_dir():
         raise JobError("dataset_unavailable")
     truth = root / "truth" / "truth.json"
-    return root / "input", truth if truth.is_file() else None
+    attacker = root / "attacker"
+    return (root / "input", truth if truth.is_file() else None,
+            attacker if (attacker / "registry.csv").is_file() else None)
 
 
 async def execute_job(job_id: str, store: JobStore, settings: Settings) -> None:
@@ -166,21 +196,34 @@ async def execute_job(job_id: str, store: JobStore, settings: Settings) -> None:
             raise JobError("service_not_configured")
         master = settings.master_secret.get_secret_value()
         secret = derive_release_secret(master, job["owner"], job["release"])
-        input_dir, truth = resolve_input(settings, job, paths)
+        input_dir, truth, attacker = resolve_input(settings, job, paths)
+        opts = job["options"]
+        policy = resolve_policy(settings, opts.get("policy"))
+        explain_dir = paths.explain if opts.get("explain") else None
         run = await asyncio.to_thread(run_pipeline, settings, input_dir, paths.output,
-                                      paths.work, secret)
+                                      paths.work, secret, policy, explain_dir)
         if run["exit_code"] != 0:
             raise JobError("pipeline_failed")
         summary = _summary(paths.output)
         summary["wall_seconds"] = run["seconds"]
+        summary["policy"] = opts.get("policy") or "default"
         verification: dict[str, Any] = {}
-        if job["options"].get("verify_determinism"):
+        rotated_release: Path | None = None
+        if opts.get("verify_determinism"):
             rotated = derive_release_secret(master, job["owner"], job["release"] + "~rotation")
-            verification.update(await asyncio.to_thread(
-                _verify, settings, paths, input_dir, secret, rotated))
-        if job["options"].get("leak_scan"):
+            result, rotated_release = await asyncio.to_thread(
+                _verify, settings, paths, input_dir, secret, rotated, policy)
+            verification.update(result)
+        if opts.get("leak_scan"):
             verification["leak_scan"] = (await asyncio.to_thread(_leak_scan, paths, input_dir, truth)
                                          if truth else {"available": False})
+        if opts.get("utility"):
+            verification["utility"] = (await asyncio.to_thread(_utility, paths, input_dir, truth)
+                                       if truth else {"available": False})
+        if opts.get("attack"):
+            verification["attack"] = (await asyncio.to_thread(_attack, paths, rotated_release, input_dir,
+                                                              truth, attacker)
+                                      if truth and attacker else {"available": False})
         await asyncio.to_thread(storage.build_archive, paths)
         await store.update(job_id, status="succeeded", finished_at=utcnow(), summary=summary,
                            verification=verification or None)

@@ -1,7 +1,9 @@
 """Sanitisation jobs: create (upload or dataset), inspect, download, delete."""
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 import uuid
 from itertools import islice
 from typing import Any
@@ -39,11 +41,17 @@ async def _check_capacity(store: JobStore, settings: Settings, principal: Princi
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "too_many_active_jobs")
 
 
+def _check_policy(settings: Settings, opts: JobOptions) -> None:
+    if opts.policy and not (settings.presets_dir / f"{opts.policy}.yaml").is_file():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "unknown_policy")
+
+
 def _new_job(principal: Principal, source: str, opts: JobOptions, n_files: int) -> dict[str, Any]:
     return {"id": uuid.uuid4().hex, "owner": principal.id, "status": JobStatus.queued.value,
             "source": source, "release": opts.release,
-            "options": {"verify_determinism": opts.verify_determinism,
-                        "leak_scan": opts.leak_scan},
+            "options": {"policy": opts.policy, "verify_determinism": opts.verify_determinism,
+                        "leak_scan": opts.leak_scan, "utility": opts.utility, "attack": opts.attack,
+                        "explain": opts.explain},
             "created_at": utcnow(), "started_at": None, "finished_at": None,
             "input_files": n_files, "error": None, "summary": None, "verification": None}
 
@@ -63,11 +71,13 @@ async def create_upload_job(request: Request, principal: Principal = Depends(req
     await _check_capacity(store, settings, principal)
     form = await request.form(max_files=settings.max_upload_files, max_fields=16)
     try:
-        opts = JobOptions(release=form.get("release") or "default",
+        opts = JobOptions(release=form.get("release") or "default", policy=form.get("policy") or None,
                           verify_determinism=_bool(form.get("verify_determinism")),
-                          leak_scan=_bool(form.get("leak_scan")))
+                          leak_scan=_bool(form.get("leak_scan")), utility=_bool(form.get("utility")),
+                          attack=_bool(form.get("attack")), explain=_bool(form.get("explain")))
     except ValidationError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "invalid_options") from exc
+    _check_policy(settings, opts)
     uploads = [f for f in form.getlist("files") if isinstance(f, UploadFile)]
     if not uploads:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "no_files")
@@ -102,6 +112,7 @@ async def create_dataset_job(body: DatasetJobRequest,
             or root.resolve() not in (root / body.dataset).resolve().parents:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "dataset_not_found")
     await _check_capacity(store, settings, principal)
+    _check_policy(settings, body)
     n = sum(1 for p in (root / body.dataset / "input").rglob("*") if p.is_file())
     job = _new_job(principal, f"dataset:{body.dataset}", body, n)
     storage.create_workspace(storage.job_paths(settings.data_dir, job["id"]))
@@ -181,6 +192,87 @@ async def download_archive(job: dict[str, Any] = Depends(owned_job),
         raise HTTPException(status.HTTP_404_NOT_FOUND, "archive_not_found")
     return FileResponse(paths.archive, media_type="application/zip",
                         filename=f"anamika-release-{job['id'][:8]}.zip")
+
+
+def _explain_dir(settings: Settings, job: dict[str, Any]) -> Any:
+    _done(job)
+    d = storage.job_paths(settings.data_dir, job["id"]).explain
+    if not job["options"].get("explain") or not d.is_dir():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "explain_not_requested")
+    return d
+
+
+@router.get("/{job_id}/explain", dependencies=READ)
+async def explain_index(job: dict[str, Any] = Depends(owned_job),
+                        settings: Settings = Depends(settings_dep)) -> dict[str, Any]:
+    """Per-file summaries of what was detected (types and rule counts; never values)."""
+    d = _explain_dir(settings, job)
+    items = []
+    for p in sorted(d.glob("*.json")):
+        if p.name == "linkage.json":
+            continue
+        info = json.loads(p.read_text(encoding="utf-8"))
+        types: dict[str, int] = {}
+        for sp in info.get("spans", []):
+            types[sp["type"]] = types.get(sp["type"], 0) + 1
+        items.append({"key": p.stem, "output": info.get("output"), "format": info.get("format"),
+                      "records": info.get("records"), "span_types": types,
+                      "columns": len(info.get("columns", [])), "fields": len(info.get("fields", []))})
+    return {"items": items}
+
+
+@router.get("/{job_id}/explain/{key}", dependencies=READ)
+async def explain_file(key: str, job: dict[str, Any] = Depends(owned_job),
+                       settings: Settings = Depends(settings_dep)) -> dict[str, Any]:
+    """Full value-free explanation of one file: spans with offsets, types and rules."""
+    if not re.fullmatch(r"[0-9a-f]{16}", key):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "explain_not_found")
+    p = _explain_dir(settings, job) / f"{key}.json"
+    if not p.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "explain_not_found")
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+@router.get("/{job_id}/graph", dependencies=READ)
+async def identity_graph(job: dict[str, Any] = Depends(owned_job),
+                         settings: Settings = Depends(settings_dep)) -> dict[str, Any]:
+    """Identity graph: records → pseudonyms with the evidence *types* that linked them, and
+    pairs deliberately kept apart (conflicting identifiers). Never contains values."""
+    p = _explain_dir(settings, job) / "linkage.json"
+    if not p.is_file():
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "graph_not_available")
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+@router.get("/{job_id}/compare/{file_path:path}", dependencies=DOWNLOAD)
+async def compare_file(file_path: str, job: dict[str, Any] = Depends(owned_job),
+                       settings: Settings = Depends(settings_dep)) -> dict[str, Any]:
+    """Original and sanitised text side by side — demo only, synthetic server-side datasets."""
+    _done(job)
+    if not settings.allow_originals or not job["source"].startswith("dataset:"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "originals_disabled")
+    paths = storage.job_paths(settings.data_dir, job["id"])
+    target = storage.resolve_release_file(paths, file_path, settings.max_path_depth)
+    report = json.loads((paths.output / "report.json").read_text(encoding="utf-8"))
+    out_rel = "sanitized/" + target.relative_to((paths.output / "sanitized").resolve()).as_posix()
+    sha = next((e["input_sha256"] for e in report["files"] if e.get("output") == out_rel), None)
+    root = settings.datasets_dir / job["source"].split(":", 1)[1] / "input"  # type: ignore[operator]
+    original = None
+    for p in sorted(root.rglob("*")):
+        if p.is_file() and hashlib.sha256(p.read_bytes()).hexdigest() == sha:
+            original = p
+            break
+    if original is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "original_not_found")
+    from anamika.ingest.sniff import QuarantineError, decode_bytes
+
+    try:
+        orig_text = decode_bytes(original.read_bytes()).text
+    except QuarantineError as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, "original_not_text") from exc
+    explain = paths.explain / f"{sha[:16]}.json"
+    return {"path": out_rel, "original": orig_text, "sanitized": target.read_text(encoding="utf-8"),
+            "explain": json.loads(explain.read_text(encoding="utf-8")) if explain.is_file() else None}
 
 
 @router.delete("/{job_id}", status_code=204, dependencies=READ)
