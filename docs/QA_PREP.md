@@ -115,3 +115,19 @@ text, and it always keeps the ICD code.
 **Q: Can you show why two same-name patients were not merged?**
 Yes. The identity graph lists every pair kept apart and the conflicting attribute (`dob`, `age`,
 `fs_score`) without values. The console draws it.
+
+## Stage 5 · Console
+
+**Q: Is the console showing real data or a mock-up?**
+Real. Every screen reads a live job: press Run pipeline and the numbers come from that run. The browser never sees the
+API key; originals are shown only in local demo mode on synthetic data.
+
+**Q: Your first count said 9 wrong merges refused, now 5. Why?**
+Nine record pairs were refused on weak evidence. Four of them were later joined by a strong ID, so they are one person
+correctly. Five patient pairs stayed apart. We show the honest number.
+
+**Q: What did building the console find?**
+Two bugs. A Hindi husband's-name line took the patient's pseudonym, now fixed with tests and no score regression. And
+the job leak scan counted ward labels like "Ward 3" inside rerun copies as side-channel hits; reruns are now compared byte
+for byte instead.
+

@@ -25,7 +25,7 @@ _LABEL = re.compile(r"(?i)(?<![A-Za-z])(?:Age(?:\s*/\s*Sex)?|Umar|आयु|उ�
 _SEXED = re.compile(r"(?<![\d.\-])(\d{1,3})\s*(?:Yrs?|Years?|Y|yrs?|years?|वर्ष)?\.?\s*/\s*(?:M|F|Male|Female|पुरुष|महिला)(?![A-Za-z])")
 _NARR = re.compile(r"(?:^|,)\s*(\d{1,3})\s*(?:yrs?|years?|Y)\.?\s*(?=,|/|$|\s+(?:old|male|female|M|F)\b)",
                    re.IGNORECASE | re.MULTILINE)
-_DEVA = re.compile(r"(?<![\d.])(\d{1,3})\s*वर्ष")
+_DEVA = re.compile(r"(?<![\d.\-])(\d{1,3})\s*वर्ष")
 _DURATION_BEFORE = re.compile(r"(?i)(?:\bx|×|since|for|from|past|last|over|h/o\s+\w+|since\s+\w+)\s*$")
 
 
@@ -59,6 +59,8 @@ def band_text(text: str, width: int = 5, top_code: int = 90) -> tuple[str, int]:
 def band_value(value: str, width: int = 5, top_code: int = 90) -> str | None:
     """Band a field value (``48``, ``48 वर्ष``, ``48 Yrs``, ``48/F``); ``None`` if not an age."""
     t = ascii_digits(value or "").strip()
+    if t.startswith(("-", "−")):
+        return value  # an impossible (negative) age identifies no one; banding would be untruthful
     m = re.match(r"^(\d{1,3})(\D*)$", t)
     if not m or int(m.group(1)) > 125:
         return None

@@ -4,16 +4,28 @@
 
 An offline, CPU-only, LLM-free privacy firewall for India's multilingual hospital records (English, Devanagari Hindi, Hinglish). Anamika removes personal data from messy multi-hospital exports, including names hidden in file names, JSON keys, CSV headers, export metadata and base64 attachments. Every mevdical value stays exactly as it was. The same patient gets one keyed pseudonym across files, scripts and hospitals. The output is generalised so that a voter-list attacker cannot single anyone out.
 
+<<<<<<< HEAD
 ![tests](https://img.shields.io/badge/tests-267%20passed%20%2F%202%20failing-orange)
+=======
+![tests](https://img.shields.io/badge/tests-274%20passing-0E9F8E)
+>>>>>>> upstream/main
 ![api](https://img.shields.io/badge/API-FastAPI%20%C2%B7%20Docker-0F1B2D)
 ![contract](https://img.shields.io/badge/validate__output-CONTRACT%20OK-0E9F8E)
 ![offline](https://img.shields.io/badge/runtime-offline%20%C2%B7%20CPU%20%C2%B7%20no%20LLM-0F1B2D)
-![stage](https://img.shields.io/badge/stage-S4%20backend%20complete-F2A900)
-![privacy](https://img.shields.io/badge/attack%20resistance-0.914-0E9F8E)
+![stage](https://img.shields.io/badge/stage-S5%20console%20complete-F2A900)
+![privacy](https://img.shields.io/badge/attack%20resistance-0.916-0E9F8E)
 
+<<<<<<< HEAD
 > **Status: Stage 4, backend complete.** Detection in three scripts and every hiding place, cross-script linkage, measured privacy (our A1–A7 attacker, resistance 0.914) and the full FastAPI service are implemented. The Next.js console is next (S5).
 >
 > **Testing note:** The latest local Windows run reports 267 passed and 2 failed out of 269 tests. The remaining failures concern cross-file patient pseudonym linkage and POSIX-style temporary-directory permissions on Windows. These are being investigated.
+=======
+> **Status: Stage 5, console complete.** Detection in three scripts and every hiding place,
+> cross-script linkage, measured privacy (our A1–A7 attacker, resistance 0.916), the FastAPI
+> service and a six-screen Next.js console driven by live runs.
+
+![Anamika Console: Command Overview](docs/console-hero.png)
+>>>>>>> upstream/main
 
 ## Quickstart
 
@@ -236,6 +248,43 @@ The CLI run needs no network. The secret is read from `RAKSHA_SECRET` only and n
 - `out/report.json`: every input by SHA-256 plus true counts, timing and peak memory.
 - `out/records.jsonl`: record → pseudonym.
 
+## Run the console
+
+The console (`dashboard/`, Next.js) is a demo and review tool on synthetic data. It is not part of the
+evaluated pipeline and not in `requirements.txt`. It needs Node.js 20+ and the backend set up with `uv sync`.
+
+**Linux / macOS**
+
+```bash
+cd dashboard
+npm install
+npm run demo
+```
+
+**Windows (PowerShell)**
+
+```powershell
+cd dashboard
+npm install
+npm run demo
+```
+
+`npm run demo` builds once, starts FastAPI on `127.0.0.1:8001` and the console on `http://localhost:3000`, and
+creates a local `.env.local` with a random API key and run secret. Datasets come from `../datasets/<name>/{input,truth,attacker}`
+(override with `ANAMIKA_DATASETS_DIR`). Press **Run pipeline**; a run with the attack and the reruns takes about a minute.
+
+| Screen | What it proves |
+|---|---|
+| Overview | re-identification 98% → 2%, 3,399 identifiers removed, 0 canaries, runtime and memory against the limits |
+| Redaction Studio | original vs release per file; removed, generalised and deliberately kept values; Hindi and Hinglish |
+| Identity Graph | 877 records → 53 patients across hospitals and scripts; same-name pairs kept apart, with the reason |
+| Attack Simulator | our attacker on raw vs release per preset; measured privacy ↔ utility trade-off |
+| Clinical Integrity | 98.1% clinical values kept, length of stay 34/34 exact, age bands 359/359 truthful |
+| Security & Audit | leak scan per channel, byte-identical rerun, secret rotation, quarantine by SHA-256, key design |
+
+The browser never talks to FastAPI: server-side Route Handlers hold the API key. Originals are shown only in local
+demo mode (`ANAMIKA_ALLOW_ORIGINALS`), which production refuses. Five-minute walkthrough: [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
+
 ## Architecture
 
 ```mermaid
@@ -345,6 +394,6 @@ anamika/
 │   ├── tools/             leak scan, determinism, md2pdf
 │   ├── tests/             pipeline + API tests
 │   └── resources/ training/ models/   lexicons; no models
-├── frontend/              Next.js console (not started)
+├── dashboard/             Next.js console (demo and review only; npm run demo)
 └── docs/                  design notes, ADRs, API, stage reports
 ```

@@ -59,3 +59,16 @@
 - API: per-job `policy`, `explain`, `utility`, `attack` options; `/explain`, `/graph`, demo-only `/compare` (refused in production), `/policy/presets`; datasets report `has_attacker`.
 - Docker end to end: one job with every option on the practice set (resistance 0.916, 0 leaks, 194/194 deterministic).
 - Tests: 269.
+
+## S5 · Anamika Console (2026-11-26)
+
+- Next.js 15 console in `dashboard/`: Command Overview with the Dissolving Identity 3D hero, Redaction Studio, Identity Graph,
+  Attack Simulator, Clinical Integrity, Security & Audit. Every number from a live FastAPI job; API key server-side only.
+- Design system (`docs/DESIGN_SYSTEM.md`): Clinical Glass tokens, offline fonts with Devanagari, validated chart palette,
+  reduced-motion and no-WebGL fallbacks, an "Explain this" drawer per screen.
+- `npm run demo` starts the API and the console; `docs/DEMO_SCRIPT.md` is the five-minute walkthrough.
+- Fix: relative labels ending in a bare "नाम"/"Name" (`पति का नाम`, `Husband Name`) gave the relative the patient's
+  pseudonym; now `[RELATIVE]`. No score regression.
+- Fix: the job leak scan treated determinism rerun releases as side channels (47 false hits); now only their logs.
+- Production build clean, screens load in under 0.4 s. Tests: 274.
+
