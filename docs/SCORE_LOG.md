@@ -8,3 +8,6 @@ The official score is estimated only from the kit's stated starter level.
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 2026-11-26 | S0 | organiser starter (reference) | 84.1% (2,718) | 82.8 / 100 / 100% | 4/4 | 100% | 0.00 | n/a | n/a | OK | n/a | ≈ 8 |
 | 2026-11-26 | S0 | Anamika starter-equivalent pipeline | 84.1% (2,717) | 82.8 / 100 / 100% | 4/4 | 100% (4,855) | 0.00 | 84.9% (2,741 / 3,230) | 96 | OK | 0.22 s / 29.6 MB | ≈ 8 |
+| 2026-11-26 | S1 | column classifier, patterns, run-time lexicon, context engine | 4.7% (152) | 5.1 / 0 / 0% | 0/4 | 99.8% | 0.97 | n/a | n/a | OK | 3.3 s | n/a |
+| 2026-11-26 | S1 | safe-vocab fix, Hinglish particles, name expansion, eponym guard, file-name growth | 0.0% (0) | 0 / 0 / 0% | 0/4 | 100% (4,855) | 0.97 | 0.0% (0 / 3,230) | 0 | OK | 2.6 s / 31 MB | n/a |
+| 2026-11-26 | S1 | JSON doc records + call-line phones as evidence | 0.0% (0) | 0 / 0 / 0% | 0/4 | 100% | **0.99** (P 1.00 R 0.96) | 0.0% | 0 | OK + READY (no warnings) | 2.6 s / 31.3 MB | not estimated until S4 attacker |

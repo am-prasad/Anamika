@@ -52,3 +52,16 @@
 ## ADR-011 · Per-tenant, per-release secrets derived from one master secret
 **Decision:** `RAKSHA_SECRET = HMAC(master, "anamika/release/v1/" + owner + "/" + release)`.
 **Why:** different tenants and releases are unlinkable (the A7 property), and no secret is ever stored or transmitted.
+
+## ADR-012 · Learn a lexicon from each dataset at run time
+**Decision:** names, IDs and places classified in structured fields (and from unambiguous text labels) are matched everywhere else in the same run.
+**Alternatives:** shipped name gazetteers; a trained NER model.
+**Why:** hidden data has new patients, so a shipped list cannot contain them, but every dataset names its patients in registration-style fields. It is offline and model-free, and it generalises by construction.
+
+## ADR-013 · Every JSON file also gets a `doc` record
+**Decision:** emit `doc` plus one pointer per collection item. Document-level evidence comes only from parts outside the collections.
+**Why:** the evaluator matches truth records to the longest covering locator. A lab report whose `panels[]` list looks like a collection is scored as `doc`, while a multi-patient visits file must not link its patients through the document.
+
+## ADR-014 · Cluster anchor breaks collisions by cluster root
+**Decision:** the anchor is the smallest key of the cluster; if two clusters kept apart by a conflict share it, the root record id is appended.
+**Why:** otherwise two people separated by a cannot-link constraint would receive the same pseudonym, which is a false merge in the output.

@@ -9,15 +9,15 @@ export metadata and base64 attachments. Every medical value stays exactly as it 
 The same patient gets one keyed pseudonym across files, scripts and hospitals. The output is
 generalised so that a voter-list attacker cannot single anyone out.
 
-![tests](https://img.shields.io/badge/tests-77%20passing-0E9F8E)
+![tests](https://img.shields.io/badge/tests-185%20passing-0E9F8E)
 ![api](https://img.shields.io/badge/API-FastAPI%20%C2%B7%20Docker-0F1B2D)
 ![contract](https://img.shields.io/badge/validate__output-CONTRACT%20OK-0E9F8E)
 ![offline](https://img.shields.io/badge/runtime-offline%20%C2%B7%20CPU%20%C2%B7%20no%20LLM-0F1B2D)
-![stage](https://img.shields.io/badge/stage-S0%20recon%20%26%20scaffold-F2A900)
+![stage](https://img.shields.io/badge/stage-S1%20end--to--end-F2A900)
 
-> **Status: Stage 0.** The safety layer, contract-correct pipeline and measuring tools are
-> complete. Detection, linkage and the privacy layer arrive in S1–S4 (see
-> [docs/CHANGELOG.md](docs/CHANGELOG.md)). Numbers below are measured, not projected.
+> **Status: Stage 1.** Detection in three scripts and every hiding place, strong-ID linkage,
+> per-patient date shifting and generalisation are live. k-anonymity and the measured attack arrive
+> in S4 (see [docs/CHANGELOG.md](docs/CHANGELOG.md)). Numbers below are measured, not projected.
 
 ## Quickstart
 
@@ -70,10 +70,10 @@ Pipeline modules live in `backend/anamika/`.
 |---|---|---|---|
 | Safety | `anamika/safety.py` | PII-free logger, crash guards, HKDF keyring, AES-GCM temp | ✅ S0 |
 | Ingest | `anamika/ingest/` | BOM/UTF-16/UTF-8/cp1252 decoding, JSON depth guard, CSV, quarantine | ✅ S0 |
-| Detect | `anamika/detect/` | patterns + validators, column classifier, context, names, clinical safelists | baseline (S1–S3) |
-| Link | `anamika/link/`, `anamika/translit/` | cross-script keys, blocking, Fellegi–Sunter, constrained clustering, HMAC pseudonyms | pseudonym primitive (S2–S4) |
-| Privacy | `anamika/privacy/` | per-patient date shift, age bands, location, k-anonymity, rare-value suppression | primitives (S1–S4) |
-| Rewrite | `anamika/rewrite/` | format-preserving CSV / JSON / FHIR / text writers | baseline (S1–S3) |
+| Detect | `anamika/detect/` | patterns, column classifier, run-time lexicon, context engine, clinical vetoes | ✅ S1 |
+| Link | `anamika/link/` | strong-ID clustering with cannot-link constraints, HMAC pseudonyms (cross-script keys next) | ✅ S1 (v1) |
+| Privacy | `anamika/privacy/` | per-patient date shift, age bands, PIN prefix, village → tehsil (k-anonymity next) | ✅ S1 |
+| Rewrite | `anamika/pipeline.py`, `anamika/rewrite/` | format-preserving CSV / JSON / FHIR / text, keys, headers, metadata, base64, file names | ✅ S1 |
 | Report | `anamika/report.py` | `report.json` + `records.jsonl` with counts derived from real output | ✅ S0 |
 | Service | `backend/app/` | FastAPI job API, Redis store/queue, arq workers, rate limits, sandboxed runs | ✅ |
 
@@ -93,15 +93,18 @@ The design is detailed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Measured results (practice data)
 
-| Metric | Value (S0) |
-|---|---|
-| Contract | CONTRACT OK; `check_submission --run` run checks all pass |
-| PII still visible / medical values kept | 84.1% / 100% (starter-equivalent baseline) |
-| Determinism | 195 / 195 output files byte-identical across runs |
-| Secret written anywhere · temp leftovers | 0 · 0 |
-| Runtime · peak RSS | 0.22 s · 29.6 MB (limits: 900 s · 4,096 MB) |
+| Metric | S0 baseline | S1 |
+|---|---|---|
+| PII still visible (`check_dev`): all / latin / deva / hinglish | 84.1% / 82.8 / 100 / 100% | **0.0% / 0 / 0 / 0%** |
+| PII in file names, base64, metadata, keys, headers | 100% | **0%** |
+| Canaries found | 4 / 4 | **0 / 4** |
+| Medical values kept | 100% | **100%** (4,855 / 4,855) |
+| Linking precision / recall / F0.5 · false merges | 0 / 0 / 0 | **1.00 / 0.96 / 0.99 · 0** |
+| Length of stay preserved | n/a | **20 / 20** |
+| Determinism · other secret | identical · no change | **identical · 0 / 48 pseudonyms reused** |
+| Runtime · peak RSS (limits 900 s · 4,096 MB) | 0.22 s · 30 MB | **2.6 s · 31 MB** |
 
-The full history is in [docs/SCORE_LOG.md](docs/SCORE_LOG.md).
+Practice data is what we tuned on; unseen-format results follow in S2. The full history is in [docs/SCORE_LOG.md](docs/SCORE_LOG.md).
 
 ## Security design
 
@@ -144,12 +147,12 @@ listed here with its parameter count, and shipped in `models/`.
 | `backend/tools/md2pdf.py` | renders stage overviews and the brief to PDF (uv group `docs`) |
 | `uv run pytest` | 77 tests: pipeline units on synthetic strings + API security and job lifecycle |
 
-## Limitations (honest, S0)
+## Limitations (honest, S1)
 
-- Detection is still at starter level, so most names, MRNs and addresses leak. S1 targets this first.
-- No linkage or quasi-identifier generalisation yet, so identity and privacy scores are low.
-- Unsupported formats (PDF, images, XML) are quarantined rather than parsed, by design.
-- Practice data only: generalisation to unseen formats is tested from S2 with our fuzz generator.
+- Tuned on the practice set; generalisation to renamed headers, new schemas and new name pools is designed in but not yet measured (fuzz tests in S2).
+- Hindi-only records with no identifier (language trap) and `<name>, W/o <husband>` notes are not linked yet (recall 0.96).
+- No k-anonymity escalation or measured re-identification risk yet; rare diagnoses and very old ages remain exposed to the targeted attack (S4).
+- Unsupported formats (PDF, images, XML) and invalid-UTF-8 notes are quarantined rather than parsed, by design.
 
 ## Repository map
 

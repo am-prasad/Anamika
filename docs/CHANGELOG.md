@@ -17,3 +17,13 @@
 - Scalability: stateless API replicas, Redis job store and queue, arq workers scalable with `--scale worker=N`, an internal network with no worker egress.
 - Docker: one hardened non-root image (API + worker), compose stack with Redis. Verified end to end: the practice dataset gives the same counts as the CLI, 195/195 files deterministic, 1.2 s, 44 MB.
 - Tests: 77 (51 pipeline + 26 API).
+
+## S1 · Valid end-to-end with real protection (2026-11-26)
+
+- Field classifier for CSV headers and JSON keys (English, Hinglish, Devanagari) with value profiling for unseen headers.
+- Indian identifier patterns (phones incl. Devanagari digits, Aadhaar, masked Aadhaar, ABHA number/address, PAN, e-mail, labelled PIN), bounded so doses, frequencies, vitals and lab values never match.
+- Run-time lexicon learned from each dataset; context engine for labels, relations, honorifics, Hinglish particles and unseen capitalised names; doctor / facility / tehsil-district vetoes; eponym guard.
+- Format-preserving per-patient date shifting, truthful age bands, PIN → 3-digit prefix, village → tehsil.
+- Strong-ID linkage with cannot-link constraints; pseudonyms written inside every linked record.
+- Hidden channels cleaned: JSON keys, CSV headers, export metadata, FHIR narrative, base64 attachments, file names.
+- Practice self-check: 0 / 3,230 PII visible, 0 / 4 canaries, 100% medical values, link F0.5 0.99 (0 false merges), LOS 20/20, 2.6 s, 31 MB. 185 tests.
