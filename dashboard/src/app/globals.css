@@ -39,8 +39,8 @@
   --color-ramp-4: #1a8a7a;
   --color-ramp-5: #0f5e54;
 
-  --font-display: var(--font-display-face), ui-serif, serif;
-  --font-sans: var(--font-sans-face), ui-sans-serif, sans-serif;
+  --font-display: var(--font-display-face), var(--font-deva-face), ui-serif, serif;
+  --font-sans: var(--font-sans-face), var(--font-deva-face), ui-sans-serif, sans-serif;
   --font-mono: var(--font-mono-face), ui-monospace, monospace;
   --font-deva: var(--font-deva-face), var(--font-sans-face), sans-serif;
   --font-deva-display: var(--font-deva-display-face), serif;

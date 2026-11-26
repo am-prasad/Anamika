@@ -8,7 +8,8 @@ export function CountUp({ value, digits = 0, suffix = "", delay = 0 }: { value: 
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true });
   const reduce = useReducedMotion();
-  const [shown, setShown] = useState(reduce ? value : 0);
+  // Same initial text on server and client (no hydration mismatch); reduced motion applies after mount.
+  const [shown, setShown] = useState(0);
 
   useEffect(() => {
     if (!inView) return;
