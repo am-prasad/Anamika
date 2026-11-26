@@ -2,38 +2,36 @@
 
 **Visible to science, invisible to attackers.**
 
-An offline, CPU-only, LLM-free privacy firewall for India's multilingual hospital records
-(English, Devanagari Hindi, Hinglish). Anamika removes personal data from messy
-multi-hospital exports, including names hidden in file names, JSON keys, CSV headers,
-export metadata and base64 attachments. Every medical value stays exactly as it was.
-The same patient gets one keyed pseudonym across files, scripts and hospitals. The output is
-generalised so that a voter-list attacker cannot single anyone out.
+An offline, CPU-only, LLM-free privacy firewall for India's multilingual hospital records (English, Devanagari Hindi, Hinglish). Anamika removes personal data from messy multi-hospital exports, including names hidden in file names, JSON keys, CSV headers, export metadata and base64 attachments. Every mevdical value stays exactly as it was. The same patient gets one keyed pseudonym across files, scripts and hospitals. The output is generalised so that a voter-list attacker cannot single anyone out.
 
-![tests](https://img.shields.io/badge/tests-269%20passing-0E9F8E)
+![tests](https://img.shields.io/badge/tests-267%20passed%20%2F%202%20failing-orange)
 ![api](https://img.shields.io/badge/API-FastAPI%20%C2%B7%20Docker-0F1B2D)
 ![contract](https://img.shields.io/badge/validate__output-CONTRACT%20OK-0E9F8E)
 ![offline](https://img.shields.io/badge/runtime-offline%20%C2%B7%20CPU%20%C2%B7%20no%20LLM-0F1B2D)
 ![stage](https://img.shields.io/badge/stage-S4%20backend%20complete-F2A900)
 ![privacy](https://img.shields.io/badge/attack%20resistance-0.914-0E9F8E)
 
-> **Status: Stage 4, backend complete.** Detection in three scripts and every hiding place,
-> cross-script linkage, measured privacy (our A1–A7 attacker, resistance 0.914) and the full
-> FastAPI service are live and fuzz-tested on unseen formats. The Next.js console is next (S5).
+> **Status: Stage 4, backend complete.** Detection in three scripts and every hiding place, cross-script linkage, measured privacy (our A1–A7 attacker, resistance 0.914) and the full FastAPI service are implemented. The Next.js console is next (S5).
+>
+> **Testing note:** The latest local Windows run reports 267 passed and 2 failed out of 269 tests. The remaining failures concern cross-file patient pseudonym linkage and POSIX-style temporary-directory permissions on Windows. These are being investigated.
 
 ## Quickstart
 
-Requirements: Python 3.10+, and for the service stack Docker (Docker Desktop on Windows).
-`uv` is optional and is used for development.
+Requirements: Python 3.10+, and for the service stack Docker (Docker Desktop on Windows). `uv` is optional for development, but recommended for managing the backend environment.
 
 ### 1. Offline CLI (exactly what the evaluator runs)
 
 **Linux / macOS**
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
+
 RAKSHA_SECRET=practice python backend/main.py --input path/to/dev/input --output out
-python3 path/to/validate_output.py --input path/to/dev/input --output out   # CONTRACT OK
+
+python3 path/to/validate_output.py --input path/to/dev/input --output out
+# CONTRACT OK
 ```
 
 **Windows (PowerShell)**
@@ -42,48 +40,157 @@ python3 path/to/validate_output.py --input path/to/dev/input --output out   # CO
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+
 $env:RAKSHA_SECRET = "practice"
+
 python backend\main.py --input path\to\dev\input --output out
-python path\to\validate_output.py --input path\to\dev\input --output out   # CONTRACT OK
+
+python path\to\validate_output.py --input path\to\dev\input --output out
+# CONTRACT OK
 ```
 
-In Command Prompt (cmd), activate with `.venv\Scripts\activate.bat` and set the secret with
-`set RAKSHA_SECRET=practice`. If PowerShell blocks the activation script, run
-`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+**Windows (Command Prompt / CMD)**
 
-Optional flags: `--debug-spans DIR` writes value-free explanations (outside `--output`), and the
-`ANAMIKA_POLICY` environment variable selects a preset, e.g. `config/presets/research.yaml`.
+```cmd
+python -m venv .venv
+.venv\Scripts\activate.bat
+python -m pip install -r requirements.txt
+
+set RAKSHA_SECRET=practice
+
+python backend\main.py --input path\to\dev\input --output out
+
+python path\to\validate_output.py --input path\to\dev\input --output out
+```
+
+In Command Prompt, activate with `.venv\Scripts\activate.bat` and set environment variables with `set NAME=value`.
+
+If PowerShell blocks the activation script, run the following once:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+Optional flags: `--debug-spans DIR` writes value-free explanations (outside `--output`), and the `ANAMIKA_POLICY` environment variable selects a preset, e.g. `config/presets/research.yaml`.
 
 ### 2. Development with uv (pipeline + API + tests)
+
+The backend has its own `pyproject.toml` and `uv.lock`. Run the following commands from the `backend` directory.
 
 **Linux / macOS**
 
 ```bash
-cd backend && uv sync --extra api --group docs
-uv run pytest                                   # 269 tests
-ANAMIKA_AUTH_DISABLED=true ANAMIKA_MASTER_SECRET=dev uv run uvicorn app.main:app --reload
+cd backend
+uv sync --extra api --group docs
+
+uv run pytest
+
+uv run uvicorn app.main:app --reload
 ```
 
 **Windows (PowerShell)**
 
+Install `uv` once:
+
 ```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"   # install uv once
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Close and reopen your terminal, then verify the installation:
+
+```powershell
+uv --version
+```
+
+Install the backend dependencies:
+
+```powershell
 cd backend
 uv sync --extra api --group docs
+
 uv run pytest
-$env:ANAMIKA_AUTH_DISABLED = "true"; $env:ANAMIKA_MASTER_SECRET = "dev"
+```
+
+Start the API:
+
+```powershell
+$env:ANAMIKA_AUTH_DISABLED = "true"
+$env:ANAMIKA_MASTER_SECRET = "dev"
+
 uv run uvicorn app.main:app --reload
 ```
 
-The API docs are at http://127.0.0.1:8000/docs. On native Windows, jobs run without the Linux
-resource limits (memory / CPU caps); use Docker for the enforced sandbox.
+**Windows (Command Prompt / CMD)**
+
+Install `uv` once using PowerShell from CMD:
+
+```cmd
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Close and reopen Command Prompt so the updated PATH is loaded. Verify:
+
+```cmd
+uv --version
+```
+
+Then install the backend dependencies:
+
+```cmd
+cd backend
+uv sync --extra api --group docs
+```
+
+Run the tests:
+
+```cmd
+uv run pytest
+```
+
+Start the API:
+
+```cmd
+set ANAMIKA_AUTH_DISABLED=true
+set ANAMIKA_MASTER_SECRET=dev
+
+uv run uvicorn app.main:app --reload
+```
+
+**Alternative: use the existing `.venv` without `uv`**
+
+If you have already run `uv sync` and the `backend\.venv` environment exists, you can activate it directly from CMD:
+
+```cmd
+cd backend
+.venv\Scripts\activate.bat
+
+python -m pytest
+python main.py --help
+```
+
+To start the API in this activated environment:
+
+```cmd
+set ANAMIKA_AUTH_DISABLED=true
+set ANAMIKA_MASTER_SECRET=dev
+
+python -m uvicorn app.main:app --reload
+```
+
+You do not need to reinstall dependencies if they are already present in `.venv`.
+
+**Important environment note:** `uv sync` creates and manages `backend\.venv`. Use `uv run` for commands managed by uv, or activate `backend\.venv` and use `python` directly. Avoid accidentally running commands in a different virtual environment.
+
+The API docs are at http://127.0.0.1:8000/docs. On native Windows, jobs run without the Linux resource limits (memory / CPU caps); use Docker for the enforced sandbox.
 
 ### 3. Service stack with Docker (FastAPI API + arq workers + Redis)
 
 **Linux / macOS**
 
 ```bash
-cp .env.example .env            # set master secret, API-key hashes, Redis password
+cp .env.example .env
+# Set master secret, API-key hashes, Redis password
+
 docker compose up -d --build
 docker compose up -d --scale worker=3
 ```
@@ -91,7 +198,22 @@ docker compose up -d --scale worker=3
 **Windows (PowerShell, Docker Desktop)**
 
 ```powershell
-Copy-Item .env.example .env     # set master secret, API-key hashes, Redis password
+Copy-Item .env.example .env
+# Set master secret, API-key hashes, Redis password
+
+docker compose up -d --build
+docker compose up -d --scale worker=3
+```
+
+**Windows (Command Prompt / CMD, Docker Desktop)**
+
+```cmd
+copy .env.example .env
+```
+
+Edit `.env` to set the master secret, API-key hashes and Redis password, then run:
+
+```cmd
 docker compose up -d --build
 docker compose up -d --scale worker=3
 ```
@@ -99,27 +221,31 @@ docker compose up -d --scale worker=3
 Generate the values for `.env` (works on every OS):
 
 ```bash
-python -c "import secrets; print(secrets.token_urlsafe(48))"                       # master secret / Redis password
+python -c "import secrets; print(secrets.token_urlsafe(48))"
+# Master secret / Redis password
+
 python -c "import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest())" YOUR_API_KEY
+# API-key hash
 ```
 
 API reference, security controls and scaling model: [docs/API.md](docs/API.md).
 
-The run needs no network. The secret is read from `RAKSHA_SECRET` only and never written
-anywhere. Output: `out/sanitized/` (a mirror of the input tree, UTF-8), `out/report.json`
-(every input by SHA-256 plus true counts, timing and peak memory), and `out/records.jsonl`
-(record → pseudonym).
+The CLI run needs no network. The secret is read from `RAKSHA_SECRET` only and never written anywhere. Output:
+
+- `out/sanitized/`: a mirror of the input tree, UTF-8.
+- `out/report.json`: every input by SHA-256 plus true counts, timing and peak memory.
+- `out/records.jsonl`: record → pseudonym.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  I[Input tree read-only] --> A[Pass A ingest and parse]
-  A --> D[Detect PII spans]
-  D --> L[Link and pseudonymise]
-  L --> P[Privacy layer shift band generalise]
-  P --> W[Pass B rewrite]
-  W --> O[sanitized report records]
+    I[Input tree read-only] --> A[Pass A ingest and parse]
+    A --> D[Detect PII spans]
+    D --> L[Link and pseudonymise]
+    L --> P[Privacy layer shift band generalise]
+    P --> W[Pass B rewrite]
+    W --> O[sanitized report records]
 ```
 
 Pipeline modules live in `backend/anamika/`.
@@ -169,37 +295,24 @@ Practice data is what we tuned on; the fuzz rows are data we did not tune on (`b
 
 ## Security design
 
-The service layer adds hashed API keys, tenant isolation, Redis-backed rate limiting,
-upload and path guards, hardening headers, sandboxed no-egress workers and hardened
-containers. See [docs/API.md](docs/API.md#security-controls). The pipeline itself:
+The service layer adds hashed API keys, tenant isolation, Redis-backed rate limiting, upload and path guards, hardening headers, sandboxed no-egress workers and hardened containers. See [docs/API.md](docs/API.md#security-controls). The pipeline itself:
 
-- **Keys away from data.** `RAKSHA_SECRET` → HKDF-SHA256 → independent `pseudo`, `shift`,
-  `file`, `enc`, `record` keys. Pseudonyms are `PSN-` + base32 of an HMAC, never a plain hash.
-- **PII-free logging.** Only whitelisted, type-checked templates can be printed (counts,
-  stage names, SHA prefixes). Crashes print the exception class and stage, nothing else.
-- **Encrypted at rest.** Intermediates stay in memory. Anything spilled goes to a `0700`
-  directory, AES-256-GCM encrypted, and is wiped at exit, on error and on SIGTERM.
-- **Fail safe.** A file is either fully parsed or quarantined with a closed-vocabulary reason.
-  Nothing is copied raw, the input is opened read-only, and exit code 0 requires every input
-  to be accounted for.
+- **Keys away from data.** `RAKSHA_SECRET` → HKDF-SHA256 → independent `pseudo`, `shift`, `file`, `enc`, `record` keys. Pseudonyms are `PSN-` + base32 of an HMAC, never a plain hash.
+- **PII-free logging.** Only whitelisted, type-checked templates can be printed (counts, stage names, SHA prefixes). Crashes print the exception class and stage, nothing else.
+- **Encrypted at rest.** Intermediates stay in memory. Anything spilled goes to a `0700` directory, AES-256-GCM encrypted, and is wiped at exit, on error and on SIGTERM.
+- **Fail safe.** A file is either fully parsed or quarantined with a closed-vocabulary reason. Nothing is copied raw, the input is opened read-only, and exit code 0 requires every input to be accounted for.
 
 More detail is in [docs/SECURITY.md](docs/SECURITY.md) and [docs/PRIVACY_MODEL.md](docs/PRIVACY_MODEL.md).
 
 ## Policy knobs and presets
 
-All privacy settings live in [`config/policy.yaml`](config/policy.yaml): shift range,
-weekday handling, age-band width and top-code, DOB policy, location targets, PIN digits,
-k, quasi-identifiers, escalation order, linkage thresholds and ingest limits.
-`ANAMIKA_POLICY=path.yaml` selects an alternative preset. `config/presets/` ships three measured
-presets: `research` (tehsil, 5-year bands, resistance 0.627), `balanced` (default, state, 10-year bands, no DOB,
-0.914) and `strict` (20-year bands, rare conditions → ICD chapter, 0.917). See [docs/PRIVACY_MODEL.md](docs/PRIVACY_MODEL.md).
+All privacy settings live in [`config/policy.yaml`](config/policy.yaml): shift range, weekday handling, age-band width and top-code, DOB policy, location targets, PIN digits, k, quasi-identifiers, escalation order, linkage thresholds and ingest limits.
+
+`ANAMIKA_POLICY=path.yaml` selects an alternative preset. `config/presets/` ships three measured presets: `research` (tehsil, 5-year bands, resistance 0.627), `balanced` (default, state, 10-year bands, no DOB, 0.914) and `strict` (20-year bands, rare conditions → ICD chapter, 0.917). See [docs/PRIVACY_MODEL.md](docs/PRIVACY_MODEL.md).
 
 ## Declared models
 
-None. Anamika uses rules, regular expressions, checksums, gazetteers and keyed
-cryptography only. No LLM, generative model or pretrained transformer is used at any
-stage. Any small classical model added later (for example a CRF) will be trained by us,
-listed here with its parameter count, and shipped in `models/`.
+None. Anamika uses rules, regular expressions, checksums, gazetteers and keyed cryptography only. No LLM, generative model or pretrained transformer is used at any stage. Any small classical model added later (for example a CRF) will be trained by us, listed here with its parameter count, and shipped in `models/`.
 
 ## Development tools
 
@@ -213,11 +326,11 @@ listed here with its parameter count, and shipped in `models/`.
 | `backend/tools/utility_check.py` | preserve-probes by kind and token retention (over-redaction detector) |
 | `--debug-spans DIR` | value-free span / role / rule explanations per file, outside the release |
 | `backend/tools/md2pdf.py` | renders stage overviews and the brief to PDF (uv group `docs`) |
-| `uv run pytest` | 269 tests: pipeline units on synthetic strings + API security and job lifecycle |
+| `uv run pytest` | Runs the backend pipeline and API test suite. Latest local Windows run: 267 passed, 2 failed. |
 
 ## Repository map
 
-```
+```text
 anamika/
 ├── raksha.toml            evaluator entry (python backend/main.py)
 ├── requirements.txt       evaluator deps → backend/requirements.txt (exported from uv.lock)
@@ -225,6 +338,8 @@ anamika/
 ├── docker-compose.yml     API + workers + Redis, hardened
 ├── backend/               uv project
 │   ├── main.py            offline CLI entry
+│   ├── pyproject.toml     backend dependencies and project configuration
+│   ├── uv.lock            locked backend dependencies
 │   ├── anamika/           the pipeline (safety, ingest, detect, link, privacy, rewrite, report)
 │   ├── app/               FastAPI service (core/, api/routes/, services/, worker.py)
 │   ├── tools/             leak scan, determinism, md2pdf
