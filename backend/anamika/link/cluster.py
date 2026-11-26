@@ -32,7 +32,12 @@ class Evidence:
     rid: str                                   # stable record id: "<rel path>\x1f<loc>"
     keys: set[str] = field(default_factory=set)
     attrs: dict[str, set[str]] = field(default_factory=dict)
-    name: str | None = None
+    name: str | None = None                    # canonical Latin name (exact match with DOB)
+    pkey: str | None = None                    # cross-script phonetic name key
+    village: str | None = None                 # cross-script village key
+    relative: str | None = None                # cross-script key of the relative's name
+    pfirst: str | None = None                  # key of the patient's first given name
+    rfirst: str | None = None                  # key of the relative's first given name
 
     def attr(self, name: str, value: str | None) -> None:
         """Record a conflict-checking attribute (e.g. ``dob``)."""
@@ -48,6 +53,24 @@ def canonical_name(value: str) -> str | None:
     return " ".join(toks) if toks else None
 
 
+WEAK_KEYS = ("nv:", "nr:", "nf:")
+#: first-name + relative-first-name: may only *attach* records to a single existing cluster
+UNIQUE_ONLY = "nf:"  # name + village / name + relative: need corroborating age
+
+
+def _conflict(a: dict[str, set[str]], b: dict[str, set[str]], weak: bool = False) -> bool:
+    """Two clusters that cannot be the same person (age is checked for weak keys only)."""
+    if any(len(a.get(n, set()) | b.get(n, set())) > 1 for n in CONFLICT_ATTRS):
+        return True
+    if not weak:
+        return False
+    ages = [int(x) for x in a.get("age", set()) | b.get("age", set())]
+    return bool(ages) and max(ages) - min(ages) > AGE_TOLERANCE
+
+
+AGE_TOLERANCE = 2  # ages recorded months apart may differ by a year or two
+
+
 class Linker:
     """Collects evidence, clusters, and reports the cluster anchor of every record."""
 
@@ -60,6 +83,15 @@ class Linker:
         if ev.name and ev.attrs.get("dob"):
             for dob in ev.attrs["dob"]:
                 ev.keys.add(f"nd:{ev.name}|{dob}")
+        if ev.pkey:
+            for dob in ev.attrs.get("dob", ()):
+                ev.keys.add(f"ndx:{ev.pkey}|{dob}")
+            if ev.village:
+                ev.keys.add(f"nv:{ev.pkey}|{ev.village}")
+            if ev.relative:
+                ev.keys.add(f"nr:{ev.pkey}|{ev.relative}")
+        if ev.pfirst and ev.rfirst:
+            ev.keys.add(f"{UNIQUE_ONLY}{ev.pfirst}|{ev.rfirst}")
         self.items[ev.rid] = ev
 
     def solve(self) -> dict[str, str | None]:
@@ -83,13 +115,16 @@ class Linker:
         for r in rids:
             for k in self.items[r].keys:
                 by_key.setdefault(k, []).append(r)
+        unique_only = sorted(k for k in by_key if k.startswith(UNIQUE_ONLY))
         for k in sorted(by_key):
+            if k.startswith(UNIQUE_ONLY):
+                continue
             members = by_key[k]
             for other in members[1:]:
                 a, b = find(members[0]), find(other)
                 if a == b:
                     continue
-                if any(len(attrs[a].get(n, set()) | attrs[b].get(n, set())) > 1 for n in CONFLICT_ATTRS):
+                if _conflict(attrs[a], attrs[b], weak=k.startswith(WEAK_KEYS)):
                     continue
                 if size[a] + size[b] > self.max_cluster:
                     continue
@@ -99,6 +134,21 @@ class Linker:
                 size[a] += size[b]
                 for n, vals in attrs[b].items():
                     attrs[a].setdefault(n, set()).update(vals)
+        # Phase 2: fragment keys attach key-only records to the ONE cluster that already
+        # carries the key through stronger evidence; ambiguity (two clusters) links nothing.
+        for k in unique_only:
+            members = by_key[k]
+            anchored = {find(r) for r in members if size[find(r)] > 1}
+            if len(anchored) != 1:
+                continue
+            target = anchored.pop()
+            for r in members:
+                root = find(r)
+                if size[root] == 1 and root != target and not _conflict(attrs[target], attrs[root], weak=True):
+                    parent[root] = target
+                    size[target] += 1
+                    for n, vals in attrs[root].items():
+                        attrs[target].setdefault(n, set()).update(vals)
         anchors: dict[str, set[str]] = {}
         for r in rids:
             anchors.setdefault(find(r), set()).update(self.items[r].keys)

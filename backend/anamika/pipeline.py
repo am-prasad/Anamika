@@ -33,6 +33,7 @@ from .ingest.csv_io import write_table
 from .ingest.json_io import dump_json, escape_pointer, is_fhir_bundle, record_pointers
 from .link.cluster import Evidence, Linker, canonical_name
 from .link.pseudonym import CROCKFORD, assign
+from .translit.keys import first_key, name_key, place_key
 from .privacy import ages, dates, location
 from .rewrite import fields as F
 from .safety import Keyring
@@ -44,9 +45,9 @@ _RELATIVE_LINE = re.compile(r"(?i)(?:attendant|guardian|S/O|D/O|W/O|C/O|father|h
                             r"informant|relative|पिता|पति|पत्नी|पुत्र|visitor)")
 HARVEST_NAME_RULES = {"label.patient", "label.pt", "label.relative", "relation.marker",
                       "relation.deva", "title.pre", "title.pre.deva", "report.of", "verb.by",
-                      "whatsapp.sender", "honorific.post", "honorific.post.deva",
+                      "whatsapp.sender", "honorific.post", "honorific.post.deva", "relation.subject",
                       "hinglish.possessive"}
-PATIENT_RULES = {"label.patient", "label.pt", "report.of"}
+PATIENT_RULES = {"label.patient", "label.pt", "report.of", "relation.subject"}
 
 
 @dataclass
@@ -125,6 +126,10 @@ class Pipeline:
         for j, h in enumerate(header):
             values = [str(v) for v in (cols[j] if j < len(cols) else [])]
             role = C.classify_column(h, values)
+            if role == C.TEXT:
+                role = C.profile_people_places(values, self.lex.is_common_word) or C.TEXT
+                if role == C.PERSON_NAME and C.PATIENT_NAME not in it.roles:
+                    role = C.PATIENT_NAME
             it.roles.append(role)
             hint = C.date_order_hint(h)
             if hint and role in (C.DOB, C.DATE):
@@ -259,13 +264,30 @@ class Pipeline:
             g = _gender(s)
             if g:
                 ev.attr("gender", g)
-        elif role in (C.PATIENT_NAME, C.FIRST_NAME, C.LAST_NAME):
+        elif role in (C.PATIENT_NAME, C.FIRST_NAME, C.LAST_NAME, C.LOCAL_NAME):
             fields.setdefault(role, []).append(s)
+        elif role in (C.RELATIVE_NAME, C.GUARDIAN):
+            fields.setdefault("relative", []).append(F.strip_relation(s))
+        elif role == C.VILLAGE:
+            fields.setdefault("village", []).append(s)
+        elif role in (C.AGE, C.AGE_SEX):
+            m = re.match(r"\s*(\d{1,3})", ascii_digits(s))
+            if m and int(m.group(1)) <= 125:
+                ev.attr("age", m.group(1))
 
     def _ev_name(self, ev: Evidence, fields: dict) -> None:
         parts = fields.get(C.PATIENT_NAME) or (fields.get(C.FIRST_NAME, []) + fields.get(C.LAST_NAME, []))
         if parts:
             ev.name = canonical_name(" ".join(parts))
+            ev.pkey = name_key(" ".join(parts))
+            ev.pfirst = first_key(" ".join(parts))
+        elif fields.get(C.LOCAL_NAME):
+            ev.pkey = name_key(" ".join(fields[C.LOCAL_NAME]))
+        if fields.get("village"):
+            ev.village = place_key(fields["village"][0])
+        if fields.get("relative"):
+            ev.relative = name_key(fields["relative"][0])
+            ev.rfirst = first_key(fields["relative"][0])
 
     def _ev_leaf(self, ev: Evidence, key: str, path: list[str], resource: str | None, value: Any,
                  order: str, fields: dict) -> Any:
@@ -295,13 +317,30 @@ class Pipeline:
             elif s.etype == "ABHA_NUMBER":
                 ev.keys.add("abha:" + digits_only(val))
                 ev.attr("abha", digits_only(val))
-            elif s.etype == "PATIENT_NAME" and s.rule in PATIENT_RULES and not ev.name:
+        # name / village / relative evidence straight from the context detectors (merged
+        # spans may carry a lexicon rule id instead of the label that found them)
+        for s in sorted(self.det.context_names(t), key=lambda x: x.start):
+            val = t[s.start:s.end]
+            if s.etype == "PATIENT_NAME" and s.rule in PATIENT_RULES and not ev.pkey:
                 ev.name = canonical_name(val)
+                ev.pkey = name_key(val)
+                ev.pfirst = first_key(val)
+            elif s.etype == "RELATIVE_NAME" and s.rule in ("relation.marker", "relation.deva") \
+                    and not ev.relative:
+                ev.relative = name_key(val)
+                ev.rfirst = first_key(val)
+        for s in self.det.labelled_places_ids(t):
+            if s.etype == "VILLAGE" and s.rule == "label.village" and not ev.village:
+                ev.village = place_key(t[s.start:s.end])
         m = re.search(r"(?im)^\s*(?:DOB|Date\s+of\s+Birth|जन्म\s*तिथि)\s*[:\-]\s*(\S+)", t)
         if m:
             d = dates.parse_date(m.group(1).rstrip(".,"), order)
             if d:
                 ev.attr("dob", d.isoformat())
+        a = re.search(r"(?i)(?<![A-Za-z])(?:Age(?:\s*/\s*Sex)?|आयु|उम्र)\s*[:\-]?\s*(\d{1,3})(?!\d)"
+                      r"|(\d{1,3})\s*(?:Yrs?|Y|वर्ष)\.?\s*/\s*(?:M|F|पुरुष|महिला)", t)
+        if a:
+            ev.attr("age", a.group(1) or a.group(2))
         g = re.search(r"(?i)\b\d{1,3}\s*(?:Yrs?|Y)?\s*/\s*(M|F|Male|Female)\b|(पुरुष|महिला)", t)
         if g:
             ev.attr("gender", _gender(g.group(1) or g.group(2)))
@@ -586,7 +625,9 @@ class Pipeline:
                 stem, dot, ext = part.rpartition(".")
                 if not dot:
                     stem, ext = part, ""
-                clean = self._name_channel(stem, "filename")
+                clean = _DEVA_RUN.sub(lambda m: m.group(0) if m.group(0) in _DEVA_DOC_WORDS
+                                      else self._token(m.group(0), "filename"),
+                                      self._name_channel(stem, "filename"))
                 out.append(clean + (("." + ext) if dot else ""))
             else:
                 out.append(self._name_channel(part, "filename"))
@@ -595,6 +636,10 @@ class Pipeline:
 
 # --------------------------------------------------------------------------- helpers
 
+_DEVA_RUN = re.compile(r"[\u0900-\u0963\u0970-\u097F]+")
+#: Devanagari words that describe documents; any other Devanagari word in a file name is
+#: treated as a possible name (file names carry no clinical value worth the risk).
+_DEVA_DOC_WORDS = frozenset("पर्चा रिपोर्ट डिस्चार्ज सारांश जांच नोट्स पंजीकरण बिल दवा".split())
 _FHIR_KEYS = {"resourceType", "id", "meta", "text", "div", "status", "entry", "resource", "fullUrl"}
 
 

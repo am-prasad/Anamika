@@ -109,6 +109,7 @@ PT_DOT_RX = _rx(r"(?<![A-Za-z])Pt\.\s+(?=[A-Z])")
 RELATIVE_LABEL_RX = _rx(rf"(?<![\w{DEVA}])(?:{L.RELATIVE_LABELS}){_LABEL_END}", re.IGNORECASE)
 RELATION_RX = _rx(rf"(?<![A-Za-z/])(?:{L.RELATION_MARKERS})\.?\s*[:\-]?\s*", re.IGNORECASE)
 RELATION_DEVA_RX = _rx(rf"(?<![{DEVA}])(?:{L.RELATION_MARKERS_DEVA})\s*[:\-]?\s+")
+SUBJECT_OF_RELATION_RX = _rx(rf"(?m)^\s*((?:[A-Z][a-z'’]+\s){{0,2}}[A-Z][a-z'’]+)\s*,\s*(?i:{L.RELATION_MARKERS})")
 PRE_TITLE_RX = _rx(rf"(?<![A-Za-z])(?:{L.PRE_TITLES})\.?\s+(?=[A-Z])")
 PRE_TITLE_DEVA_RX = _rx(rf"(?<![{DEVA}])(?:{L.PRE_TITLES_DEVA})\s+(?=[{DEVA}])")
 POST_HON_RX = _rx(rf"((?:[A-Z][a-z'’]+\s+){{0,2}}[A-Z][a-z'’]+)\s+{L.POST_HONORIFICS}(?![A-Za-z])")
@@ -186,6 +187,10 @@ class Detector:
                         (lex.is_common_word(first.group(1)) and first.group(1).casefold() not in lex.name_latin):
                     continue
             add(m.end(), "RELATIVE_NAME", "relation.marker")
+        for m in SUBJECT_OF_RELATION_RX.finditer(text):
+            toks = m.group(1).split()
+            if toks and not any(lex.is_common_word(t) and t.casefold() not in lex.name_latin for t in toks):
+                spans.append(Span(m.start(1), m.end(1), "PATIENT_NAME", "relation.subject"))
         for m in RELATION_DEVA_RX.finditer(text):
             add(m.end(), "RELATIVE_NAME", "relation.deva")
         for m in PRE_TITLE_RX.finditer(text):
