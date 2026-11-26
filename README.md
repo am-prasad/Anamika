@@ -4,28 +4,18 @@
 
 An offline, CPU-only, LLM-free privacy firewall for India's multilingual hospital records (English, Devanagari Hindi, Hinglish). Anamika removes personal data from messy multi-hospital exports, including names hidden in file names, JSON keys, CSV headers, export metadata and base64 attachments. Every mevdical value stays exactly as it was. The same patient gets one keyed pseudonym across files, scripts and hospitals. The output is generalised so that a voter-list attacker cannot single anyone out.
 
-<<<<<<< HEAD
-![tests](https://img.shields.io/badge/tests-267%20passed%20%2F%202%20failing-orange)
-=======
 ![tests](https://img.shields.io/badge/tests-274%20passing-0E9F8E)
->>>>>>> upstream/main
 ![api](https://img.shields.io/badge/API-FastAPI%20%C2%B7%20Docker-0F1B2D)
 ![contract](https://img.shields.io/badge/validate__output-CONTRACT%20OK-0E9F8E)
 ![offline](https://img.shields.io/badge/runtime-offline%20%C2%B7%20CPU%20%C2%B7%20no%20LLM-0F1B2D)
 ![stage](https://img.shields.io/badge/stage-S5%20console%20complete-F2A900)
 ![privacy](https://img.shields.io/badge/attack%20resistance-0.916-0E9F8E)
 
-<<<<<<< HEAD
-> **Status: Stage 4, backend complete.** Detection in three scripts and every hiding place, cross-script linkage, measured privacy (our A1–A7 attacker, resistance 0.914) and the full FastAPI service are implemented. The Next.js console is next (S5).
->
-> **Testing note:** The latest local Windows run reports 267 passed and 2 failed out of 269 tests. The remaining failures concern cross-file patient pseudonym linkage and POSIX-style temporary-directory permissions on Windows. These are being investigated.
-=======
 > **Status: Stage 5, console complete.** Detection in three scripts and every hiding place,
 > cross-script linkage, measured privacy (our A1–A7 attacker, resistance 0.916), the FastAPI
 > service and a six-screen Next.js console driven by live runs.
 
 ![Anamika Console: Command Overview](docs/console-hero.png)
->>>>>>> upstream/main
 
 ## Quickstart
 
