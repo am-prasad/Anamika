@@ -1,6 +1,7 @@
 """Linkage v1: strong-identifier clustering with cannot-link constraints.
 
-Records are joined only through evidence the data itself provides:
+Records are joined only through evidence the data itself provides (weak, name-based keys
+must also reach a Fellegi–Sunter score threshold over every shared field):
 
 * a shared **strong identifier**: hospital ID (UHID / IPD no.), mobile number, Aadhaar,
   ABHA, e-mail;
@@ -16,6 +17,7 @@ Processing order is fully sorted, so the result is identical on every machine.
 """
 from __future__ import annotations
 
+import math
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -68,15 +70,65 @@ def _conflict(a: dict[str, set[str]], b: dict[str, set[str]], weak: bool = False
     return bool(ages) and max(ages) - min(ages) > AGE_TOLERANCE
 
 
-AGE_TOLERANCE = 2  # ages recorded months apart may differ by a year or two
+AGE_TOLERANCE = 2
+
+KEY_TYPES = {"mrn": "hospital_id", "ph": "phone", "aa": "aadhaar", "abha": "abha", "em": "email",
+             "nd": "name+dob", "ndx": "name+dob (cross-script)", "nv": "name+village+age",
+             "nr": "name+relative", "nf": "first-name+relative (fragment)"}
+
+
+def _reasons(a: dict[str, set[str]], b: dict[str, set[str]]) -> list[str]:
+    """Which attributes made two clusters incompatible (names only, never values)."""
+    out = [n for n in CONFLICT_ATTRS if len(a.get(n, set()) | b.get(n, set())) > 1]
+    ages = [int(x) for x in a.get("age", set()) | b.get("age", set())]
+    if ages and max(ages) - min(ages) > AGE_TOLERANCE:
+        out.append("age")
+    return out  # ages recorded months apart may differ by a year or two
+
+
+#: Fellegi–Sunter m/u probabilities per field: P(agree | same person), P(agree | different)
+FS_MU = {"name": (0.95, 0.01), "village": (0.90, 0.05), "relative": (0.85, 0.02),
+         "age": (0.90, 0.10), "gender": (0.99, 0.50), "dob": (0.95, 0.0025)}
+
+
+def fs_score(a: Evidence, b: Evidence) -> float:
+    """Fellegi–Sunter log2 likelihood ratio that two records describe the same person.
+
+    Each field present on both sides contributes ``log2(m/u)`` when it agrees and
+    ``log2((1-m)/(1-u))`` when it disagrees; missing fields contribute nothing.
+    """
+    def term(field_name: str, agree: bool) -> float:
+        m, u = FS_MU[field_name]
+        return math.log2(m / u) if agree else math.log2((1 - m) / (1 - u))
+
+    score = 0.0
+    if a.pkey and b.pkey:
+        score += term("name", a.pkey == b.pkey)
+    if a.village and b.village:
+        score += term("village", a.village == b.village)
+    if a.relative and b.relative:
+        score += term("relative", a.relative == b.relative)
+    ages_a, ages_b = a.attrs.get("age", set()), b.attrs.get("age", set())
+    if ages_a and ages_b:
+        score += term("age", any(abs(int(x) - int(y)) <= AGE_TOLERANCE for x in ages_a for y in ages_b))
+    g_a, g_b = a.attrs.get("gender", set()), b.attrs.get("gender", set())
+    if g_a and g_b:
+        score += term("gender", bool(g_a & g_b))
+    d_a, d_b = a.attrs.get("dob", set()), b.attrs.get("dob", set())
+    if d_a and d_b:
+        score += term("dob", bool(d_a & d_b))
+    return score
 
 
 class Linker:
     """Collects evidence, clusters, and reports the cluster anchor of every record."""
 
-    def __init__(self, max_cluster: int = 1000) -> None:
+    def __init__(self, max_cluster: int = 1000, fs_threshold: float = 12.0) -> None:
         self.items: dict[str, Evidence] = {}
         self.max_cluster = max_cluster
+        self.fs_threshold = fs_threshold
+        self.edges: list[tuple[str, str, str]] = []        # (record, record, key type)
+        self.kept_apart: list[tuple[str, str, str, list[str]]] = []  # (rec, rec, key type, reasons)
 
     def add(self, ev: Evidence) -> None:
         """Register a record's evidence (records without keys stay unlinked)."""
@@ -125,6 +177,11 @@ class Linker:
                 if a == b:
                     continue
                 if _conflict(attrs[a], attrs[b], weak=k.startswith(WEAK_KEYS)):
+                    self.kept_apart.append((members[0], other, k.split(":", 1)[0],
+                                            _reasons(attrs[a], attrs[b])))
+                    continue
+                if k.startswith(WEAK_KEYS) and fs_score(self.items[members[0]], self.items[other]) < self.fs_threshold:
+                    self.kept_apart.append((members[0], other, k.split(":", 1)[0], ["fs_score"]))
                     continue
                 if size[a] + size[b] > self.max_cluster:
                     continue
@@ -132,6 +189,7 @@ class Linker:
                     a, b = b, a
                 parent[b] = a
                 size[a] += size[b]
+                self.edges.append((members[0], other, k.split(":", 1)[0]))
                 for n, vals in attrs[b].items():
                     attrs[a].setdefault(n, set()).update(vals)
         # Phase 2: fragment keys attach key-only records to the ONE cluster that already
@@ -147,6 +205,8 @@ class Linker:
                 if size[root] == 1 and root != target and not _conflict(attrs[target], attrs[root], weak=True):
                     parent[root] = target
                     size[target] += 1
+                    anchor_member = next(m for m in members if find(m) == target and m != r)
+                    self.edges.append((anchor_member, r, k.split(":", 1)[0]))
                     for n, vals in attrs[root].items():
                         attrs[target].setdefault(n, set()).update(vals)
         anchors: dict[str, set[str]] = {}

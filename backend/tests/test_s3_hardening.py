@@ -128,8 +128,9 @@ def test_debug_spans_are_value_free_and_outside_output(tmp_path: Path) -> None:
     (inp / "n.txt").write_text("Name: Zorawar Pundir\nMob: 9876501234\nDolo 650 BD\n")
     out, dbg = tmp_path / "out", tmp_path / "dbg"
     assert run(inp, out, "--debug-spans", str(dbg)).returncode == 0
-    files = list(dbg.glob("*.json"))
+    files = [f for f in dbg.glob("*.json") if f.name != "linkage.json"]
     assert len(files) == 1 and "n.txt" not in files[0].name
+    assert "Zorawar" not in (dbg / "linkage.json").read_text()
     blob = files[0].read_text()
     assert "Zorawar" not in blob and "9876501234" not in blob
     info = json.loads(blob)

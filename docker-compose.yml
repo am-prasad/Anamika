@@ -27,6 +27,9 @@ x-backend-env: &backend-env
   ANAMIKA_RATE_JOBS_CREATE: ${ANAMIKA_RATE_JOBS_CREATE:-10/minute}
   ANAMIKA_RATE_DOWNLOADS: ${ANAMIKA_RATE_DOWNLOADS:-300/minute}
   ANAMIKA_JOB_TTL_HOURS: ${ANAMIKA_JOB_TTL_HOURS:-24}
+  # Demo only: serve originals of server-side synthetic datasets for side-by-side views.
+  # Refused at start-up when ANAMIKA_ENV=production.
+  ANAMIKA_ALLOW_ORIGINALS: ${ANAMIKA_ALLOW_ORIGINALS:-false}
 
 services:
   redis:

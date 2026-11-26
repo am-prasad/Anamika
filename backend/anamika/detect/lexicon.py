@@ -62,6 +62,8 @@ VILLAGE_LABELS = r"(?:Vill(?:age)?\.?|Gram|Gaon|Mohalla|ग्राम|गा�
 AGE_LABELS = r"(?:Age(?:/Sex)?|आयु|उम्र)"
 #: administrative places that are preserved (district / tehsil are research value)
 ADMIN_PLACE_MARKERS = r"(?:Tehsil|Teh\.?|Distt\.?|District|Dist\.?|Jila|Zila|Block|तहसील|जिला|ज़िला)"
+TEHSIL_MARKERS = r"(?:Tehsil|Teh\.?|Block|Taluka|तहसील)"
+DISTRICT_MARKERS = r"(?:Distt\.?|District|Dist\.?|Jila|Zila|जिला|ज़िला)"
 
 #: words that end a name when scanning tokens after a label
 NAME_STOPWORDS = frozenset("""

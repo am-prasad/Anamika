@@ -31,3 +31,33 @@ is a deterministic canonical string of the cluster (sorted strong IDs, else sort
 fingerprints). Collisions are resolved by re-keying with a counter, iterating anchors in sorted
 order (`link/pseudonym.py::assign`). The pseudonym is written **inside** every record, in an
 existing ID column or the patient line, so the consistency check can verify it.
+
+## Status after S4
+
+| Evidence | Key | Rule |
+|---|---|---|
+| hospital ID (UHID / IPD / reg no.) | `mrn:` | exact, strong |
+| mobile, Aadhaar, ABHA, e-mail | `ph:`, `aa:`, `abha:`, `em:` | exact, strong |
+| canonical name + DOB | `nd:` / `ndx:` (cross-script) | exact |
+| cross-script name + village (+ age ±2) | `nv:` | weak: needs a Fellegi–Sunter score ≥ `fs_threshold` |
+| cross-script name + relative's name | `nr:` | weak: FS gate |
+| first name + relative's first name | `nf:` | fragment: may only **attach** a singleton to the one cluster already carrying the key |
+
+Fellegi–Sunter weights (log2 m/u):
+
+| Field | Agree | Disagree |
+|---|---|---|
+| name | +6.6 | — |
+| village | +4.2 | — |
+| relative | +5.4 | — |
+| age ±2 | +3.2 | −3.2 |
+| gender | +1.0 | −6.6 |
+| DOB | +8.6 | −9.0 |
+
+Cannot-link constraints: Aadhaar, ABHA, DOB, gender, plus age ±2 for weak keys.
+
+**Identity graph.** `linkage.json` and `GET /api/v1/jobs/{id}/graph` list exported records,
+the evidence *type* of every merge edge, and every pair kept apart, with the conflicting
+attribute names (`dob`, `age`, `fs_score`…). There are no values.
+
+Practice: precision 1.00, recall 0.99, F0.5 1.00, 0 false merges. Fuzz ×3: F0.5 0.99, 0 false merges.

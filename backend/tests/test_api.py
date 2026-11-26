@@ -200,7 +200,7 @@ def test_dataset_job_and_allow_list(tmp_path: Path) -> None:
     (ds / "n.txt").write_text(NOTE, encoding="utf-8")
     with TestClient(create_app(make_settings(tmp_path, datasets_dir=tmp_path / "datasets"))) as c:
         items = c.get("/api/v1/datasets", headers=H()).json()["items"]
-        assert items == [{"name": "demo", "files": 1, "has_answer_key": False}]
+        assert items == [{"name": "demo", "files": 1, "has_answer_key": False, "has_attacker": False}]
         assert c.post("/api/v1/jobs/from-dataset", headers=H(),
                       json={"dataset": "nope"}).status_code == 404
         r = c.post("/api/v1/jobs/from-dataset", headers=H(),
@@ -227,4 +227,4 @@ def test_release_secret_is_tenant_and_release_scoped() -> None:
 
 def test_policy_endpoint(client: TestClient) -> None:
     pol = client.get("/api/v1/policy", headers=H()).json()
-    assert pol["kanon"]["k"] == 5 and "dates" in pol
+    assert pol["location"]["level"] in ("tehsil", "district", "state") and "dates" in pol

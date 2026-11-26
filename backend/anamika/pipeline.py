@@ -26,7 +26,7 @@ from typing import Any, Callable, Mapping
 from . import policy as pol
 from .detect import columns as C
 from .detect.engine import Detector, Span
-from .detect.lexicon import ADMIN_PLACE_MARKERS
+from .detect.lexicon import ADMIN_PLACE_MARKERS, DISTRICT_MARKERS, TEHSIL_MARKERS
 from .detect.patterns import ascii_digits, digits_only, phone_key
 from .detect.runtime import RuntimeLexicon
 from .ingest.csv_io import write_table
@@ -34,12 +34,13 @@ from .ingest.json_io import dump_json, escape_pointer, is_fhir_bundle, record_po
 from .link.cluster import Evidence, Linker, canonical_name
 from .link.pseudonym import CROCKFORD, assign
 from .translit.keys import first_key, name_key, place_key
-from .privacy import ages, dates, location
+from .privacy import ages, dates, kanon, location
 from .rewrite import fields as F
 from .safety import Keyring
 
 _B64 = re.compile(r"^[A-Za-z0-9+/]{24,}={0,2}$")
 _ADMIN = re.compile(rf"^\s*{ADMIN_PLACE_MARKERS}", re.IGNORECASE)
+_DISTRICT = re.compile(rf"^\s*{DISTRICT_MARKERS}", re.IGNORECASE)
 _WARD = re.compile(r"^\s*(?:Ward|Bed|Room)\s*\d+\s*$", re.IGNORECASE)
 _RELATIVE_LINE = re.compile(r"(?i)(?:attendant|guardian|S/O|D/O|W/O|C/O|father|husband|mother|"
                             r"informant|relative|पिता|पति|पत्नी|पुत्र|visitor)")
@@ -76,11 +77,13 @@ class Pipeline:
         self.keys, self.policy = keys, policy
         self.lex = RuntimeLexicon()
         self.det = Detector(self.lex)
-        self.linker = Linker(int(pol.get(policy, "linkage.max_cluster_size", 1000)))
+        self.linker = Linker(int(pol.get(policy, "linkage.max_cluster_size", 5000)),
+                             float(pol.get(policy, "linkage.fs_threshold", 12.0)))
         self.psn: dict[str, str | None] = {}
         self.id_psn: dict[str, str] = {}
         self.entities: Counter[str] = Counter()
         self.generalized: set[str] = set()
+        self.suppressed: set[str] = set()
         self.band = int(pol.get(policy, "ages.band_years", 5))
         self.top = int(pol.get(policy, "ages.top_code", 90))
         self.pin_digits = int(pol.get(policy, "location.pin_digits", 3))
@@ -88,6 +91,13 @@ class Pipeline:
         self.smax = int(pol.get(policy, "dates.shift_max_days", 365))
         self.s7 = bool(pol.get(policy, "dates.shift_multiple_of_7", False))
         self.prefix = str(pol.get(policy, "output.pseudonym_prefix", "PSN-"))
+        self.level = str(pol.get(policy, "location.level", "tehsil"))
+        self.rare_k = int(pol.get(policy, "kanon.rare_k", 0))
+        self.rare_rx: re.Pattern[str] | None = None
+        self.rare_code: dict[str, str | None] = {}
+        self.lex.keep_tehsil = self.level == "tehsil"
+        self.lex.keep_district = self.level != "state"
+        self.dob_policy = str(pol.get(policy, "ages.dob_policy", "shift"))
 
     # ================================================================ Pass A
     def observe(self, items: list[Item]) -> None:
@@ -127,6 +137,8 @@ class Pipeline:
                 for k in ev.keys:
                     if k.startswith("mrn:"):
                         self.id_psn.setdefault(k[4:], p)
+        if self.rare_k > 1:
+            self._learn_rare(items)
 
     def _learn_csv(self, it: Item) -> None:
         header, rows = it.payload
@@ -173,7 +185,11 @@ class Pipeline:
                     self.lex.add_name(F.strip_relation(seg))
                 elif len(seg) >= 6 and not re.fullmatch(r"[\d\s-]+", seg):
                     self.lex.add_place(seg)
-        elif role in (C.DOCTOR, C.TEHSIL, C.DISTRICT, C.STATE, C.FACILITY):
+        elif role == C.DISTRICT:
+            self.lex.add_admin(v, "district")
+        elif role == C.TEHSIL:
+            self.lex.add_admin(v, "tehsil")
+        elif role in (C.DOCTOR, C.STATE, C.FACILITY):
             self.lex.add_protected(v)
 
     def _learn_leaf(self, key: str, path: list[str], resource: str | None, value: Any) -> Any:
@@ -199,8 +215,83 @@ class Pipeline:
                     self.lex.add_place(val)
         for a, b in self.det.protected(t):
             seg = t[a:b]
-            if not seg.startswith("<"):
+            if seg.startswith("<"):
+                continue
+            m = re.match(rf"(?i)\s*({TEHSIL_MARKERS}|{DISTRICT_MARKERS})\s*\.?\s*[:\-]?\s*(.+)", seg)
+            if m:
+                kind = "tehsil" if re.match(rf"(?i){TEHSIL_MARKERS}", m.group(1)) else "district"
+                self.lex.add_admin(m.group(2), kind)
+            else:
                 self.lex.add_protected(re.sub(r"(?i)^(?:dr|doctor)\.?\s*", "", seg))
+
+    # ---------------------------------------------------------------- rare values
+    def _learn_rare(self, items: list[Item]) -> None:
+        """Count distinct patients per condition / procedure text; compile the rare ones."""
+        rv = kanon.RareValues(self.rare_k)
+        for it in items:
+            if it.fmt in ("csv", "tsv"):
+                header, rows = it.payload
+                for i, row in enumerate(rows):
+                    r = rid(it.rel, f"row:{i}")
+                    holder = self.psn.get(r) or r
+                    for j, v in enumerate(row):
+                        if j < len(it.roles) and it.roles[j] == C.CLINICAL and v and \
+                                _CONDITION_HEADER.search(header[j]) and not re.fullmatch(r"[\d.\s/-]+", v):
+                            rv.add(v, holder)
+                        for m in kanon.DISPLAY_CODE_RX.finditer(v or ""):
+                            rv.add(m.group(1), holder, m.group(2))
+            elif it.fmt == "json":
+                holder = self.psn.get(rid(it.rel, "doc")) or rid(it.rel, "doc")
+                stack: list[tuple[Any, str]] = [(it.payload, holder)]
+                ptrs = {loc for loc in it.locs if loc != "doc"}
+                while stack:
+                    node, h = stack.pop()
+                    if isinstance(node, dict):
+                        code = node.get("code")
+                        disp = node.get("display") or node.get("text")
+                        if isinstance(code, str) and kanon.ICD_RX.fullmatch(code) and isinstance(disp, str):
+                            rv.add(disp, h, code)
+                        for k, v in node.items():
+                            if isinstance(v, str) and C.classify_label(k) == C.CLINICAL and F.norm_key(k) in (
+                                    "procedure", "diagnosis", "dx", "condition"):
+                                rv.add(v, h)
+                            elif isinstance(v, str):
+                                for m in kanon.DISPLAY_CODE_RX.finditer(v):
+                                    rv.add(m.group(1), h, m.group(2))
+                            else:
+                                stack.append((v, h))
+                    elif isinstance(node, list):
+                        stack.extend((v, h) for v in node)
+                for loc in ptrs:
+                    r = rid(it.rel, loc)
+                    if self.psn.get(r):
+                        node = _resolve(it.payload, loc)
+                        for txt in _strings(Item(it.rel, it.sha, "json", node, ["doc"])):
+                            for m in kanon.DISPLAY_CODE_RX.finditer(txt):
+                                rv.add(m.group(1), self.psn[r], m.group(2))
+            else:
+                r = rid(it.rel, "doc")
+                holder = self.psn.get(r) or r
+                for m in kanon.DISPLAY_CODE_RX.finditer(it.payload):
+                    rv.add(m.group(1), holder, m.group(2))
+        rare = rv.rare()
+        self.rare_code = rare
+        if rare:
+            alts = sorted(rare, key=len, reverse=True)
+            self.rare_rx = re.compile(r"(?<![\w])(?:" + "|".join(re.escape(a) for a in alts) + r")(?![\w])",
+                                      re.IGNORECASE)
+
+    def suppress_rare(self, text: str, record: str) -> str:
+        """Replace rare condition / procedure texts by their ICD chapter (codes are kept)."""
+        if self.rare_rx is None or not text:
+            return text
+
+        def sub(m: re.Match[str]) -> str:
+            self.entities["RARE_CONDITION"] += 1
+            self.suppressed.add(record)
+            return kanon.placeholder(self.rare_code.get(" ".join(m.group(0).split()).casefold()))
+
+        return self.rare_rx.sub(sub, text)
 
     # ---------------------------------------------------------------- evidence
     def _evidence(self, it: Item) -> None:
@@ -395,6 +486,14 @@ class Pipeline:
             self.entities[s.etype if s.etype != "PERSON_NAME" else "PATIENT_NAME"] += 1
         taken = [(a, b) for a, b, _ in repl]
         changed = bool(repl)
+        if mode == "text" and self.dob_policy in ("year", "remove"):
+            for m in _DOB_LABEL.finditer(text):
+                for h in dates.find_dates(text[m.end():m.end() + 30], order)[:1]:
+                    a, b = m.end() + h.start, m.end() + h.end
+                    if h.start == 0 and all(b <= x or a >= y for x, y in taken):
+                        repl.append((a, b, str(h.value.year) if self.dob_policy == "year" else "[DOB]"))
+                        taken.append((a, b))
+                        changed = True
         if mode == "text":
             for h in dates.find_dates(text, order):
                 if all(h.end <= a or h.start >= b for a, b in taken):
@@ -405,6 +504,7 @@ class Pipeline:
         if mode == "text":
             out, n = ages.band_text(out, self.band, self.top)
             changed |= bool(n)
+            out = self.suppress_rare(out, record)
         if changed:
             self.generalized.add(record)
         return out
@@ -421,7 +521,7 @@ class Pipeline:
                 "PHONE": "[PHONE]", "EMAIL": "[EMAIL]", "AADHAAR": "[AADHAAR]",
                 "AADHAAR_MASKED": "[AADHAAR]", "ABHA_NUMBER": "[ABHA]", "ABHA_ADDRESS": "[ABHA]",
                 "PAN": "[PAN]", "VOTER_ID": "[VOTER_ID]", "INSURANCE_ID": "[INSURANCE_ID]", "ADDRESS": "[ADDRESS]",
-                "VILLAGE": "[VILLAGE]"}.get(s.etype, "[REDACTED]")
+                "VILLAGE": "[VILLAGE]", "TEHSIL": "[TEHSIL]"}.get(s.etype, "[REDACTED]")
 
     # ---------------------------------------------------------------- fields
     def field(self, role: str | None, value: Any, psn: str | None, offset: int, order: str,
@@ -446,12 +546,21 @@ class Pipeline:
             self.entities[ent or "OTHER"] += 1
             return F.PLACEHOLDER[role]
         if role == C.VILLAGE:
-            toks = re.findall(r"[A-Za-z]{3,}", s)
-            if toks and all(t.casefold() in self.lex.protected for t in toks):
+            norm = " ".join(s.split()).casefold()
+            admin = {"tehsil": self.lex.districts | self.lex.tehsils, "district": self.lex.districts}.get(self.level, set())
+            if norm in admin:
                 return value  # already a tehsil / district: generalised, research value
             self.entities["VILLAGE"] += 1
             self.generalized.add(record)
-            return location.generalise_village((row or {}).get(C.TEHSIL))
+            up = {"tehsil": C.TEHSIL, "district": C.DISTRICT}.get(self.level, C.STATE)
+            return location.generalise_village((row or {}).get(up))
+        if role == C.TEHSIL and self.level in ("district", "state"):
+            self.generalized.add(record)
+            up = C.DISTRICT if self.level == "district" else C.STATE
+            return (row or {}).get(up) or "[TEHSIL]"
+        if role == C.DISTRICT and self.level == "state":
+            self.generalized.add(record)
+            return (row or {}).get(C.STATE) or "[DISTRICT]"
         if role == C.PIN:
             p = location.pin_prefix(s, self.pin_digits)
             if p:
@@ -462,6 +571,13 @@ class Pipeline:
         if role == C.ADDRESS:
             self.entities["ADDRESS"] += 1
             return self._address(s, psn, offset, order, record)
+        if role == C.DOB and self.dob_policy in ("year", "remove"):
+            d = dates.parse_date(s, order)
+            self.entities["DOB"] += 1
+            self.generalized.add(record)
+            if self.dob_policy == "year" and d:
+                return str(d.year)
+            return "[DOB]"
         if role in (C.DOB, C.DATE):
             out, n = dates.shift_text(s, offset, order)
             if n:
@@ -486,7 +602,8 @@ class Pipeline:
         return self.text(s, psn, offset, order, record)
 
     def _address(self, s: str, psn: str | None, offset: int, order: str, record: str) -> str:
-        keep = [seg.strip() for seg in s.split(",") if _ADMIN.match(seg.strip())]
+        admin = {"tehsil": _ADMIN, "district": _DISTRICT}.get(self.level)
+        keep = [seg.strip() for seg in s.split(",") if admin and admin.match(seg.strip())]
         pin = re.search(r"([1-8]\d{5})\s*$", ascii_digits(s))
         out = "[ADDRESS]" + ("".join(", " + k for k in keep))
         if pin:
@@ -595,6 +712,9 @@ class Pipeline:
             res = node.get("resourceType") if isinstance(node.get("resourceType"), str) else resource
             out: dict[str, Any] = {}
             for k, v in node.items():
+                if k == "birthDate" and res and self.dob_policy == "remove":
+                    self.entities["DOB"] += 1
+                    continue  # optional in FHIR R4: dropping it keeps the resource valid
                 nk = k if k in _FHIR_KEYS else self._name_channel(k, "key")
                 out[_unique(out, nk)] = self._json_node(v, path + [k], res, psn, off, order, record, key=k)
             return out
@@ -632,6 +752,34 @@ class Pipeline:
             return base64.b64encode(b"[ATTACHMENT REMOVED]").decode()
         clean = self.text(inner, psn, off, order, record)
         return base64.b64encode(clean.encode("utf-8")).decode()
+
+    # ---------------------------------------------------------------- identity graph
+    def linkage_graph(self, outputs: dict[str, str]) -> dict[str, Any]:
+        """Value-free identity graph: exported records, the evidence *types* that linked them,
+        and pairs kept apart by conflicting attributes (e.g. same name, different DOB)."""
+        from .link.cluster import KEY_TYPES
+
+        ids: dict[str, int] = {}
+        nodes = []
+        for r in sorted(self.linker.items):
+            rel, loc = r.split("\x1f", 1)
+            if rel not in outputs:
+                continue
+            ids[r] = len(nodes)
+            ev = self.linker.items[r]
+            nodes.append({"id": ids[r], "file": outputs[rel], "loc": loc, "patient": self.psn.get(r),
+                          "evidence": sorted({KEY_TYPES.get(k.split(":", 1)[0], k.split(":", 1)[0])
+                                              for k in ev.keys})})
+        edges = [{"source": ids[a], "target": ids[b], "type": KEY_TYPES.get(t, t)}
+                 for a, b, t in self.linker.edges if a in ids and b in ids]
+        apart = [{"a": ids[a], "b": ids[b], "patient_a": self.psn.get(a), "patient_b": self.psn.get(b),
+                  "shared": KEY_TYPES.get(t, t), "conflict": reasons}
+                 for a, b, t, reasons in self.linker.kept_apart if a in ids and b in ids]
+        clusters = Counter(n["patient"] for n in nodes if n["patient"])
+        return {"nodes": nodes, "edges": edges, "kept_apart": apart,
+                "summary": {"records": len(nodes), "linked": sum(1 for n in nodes if n["patient"]),
+                            "patients": len(clusters), "largest_cluster": max(clusters.values(), default=0),
+                            "kept_apart_pairs": len(apart)}}
 
     # ---------------------------------------------------------------- explainability
     def explain(self, it: Item) -> dict[str, Any]:
@@ -702,6 +850,8 @@ class Pipeline:
 
 # --------------------------------------------------------------------------- helpers
 
+_CONDITION_HEADER = re.compile(r"(?i)diagnos|\bdx\b|condition|disease|procedure|निदान|बीमारी|रोग")
+_DOB_LABEL = re.compile(r"(?i)(?:DOB|D\.O\.B\.?|Date\s+of\s+Birth|Birth\s*(?:Date|Dt)|जन्म\s*तिथि|Janm\s*Tithi)\s*[:\-]?\s*")
 _DEVA_RUN = re.compile(r"[\u0900-\u0963\u0970-\u097F]+")
 #: Devanagari words that describe documents; any other Devanagari word in a file name is
 #: treated as a possible name (file names carry no clinical value worth the risk).

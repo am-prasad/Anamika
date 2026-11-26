@@ -45,6 +45,10 @@ class JobPaths:
         return self.root / "work"
 
     @property
+    def explain(self) -> Path:
+        return self.root / "explain"
+
+    @property
     def archive(self) -> Path:
         return self.root / "release.zip"
 

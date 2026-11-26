@@ -9,15 +9,16 @@ export metadata and base64 attachments. Every medical value stays exactly as it 
 The same patient gets one keyed pseudonym across files, scripts and hospitals. The output is
 generalised so that a voter-list attacker cannot single anyone out.
 
-![tests](https://img.shields.io/badge/tests-262%20passing-0E9F8E)
+![tests](https://img.shields.io/badge/tests-269%20passing-0E9F8E)
 ![api](https://img.shields.io/badge/API-FastAPI%20%C2%B7%20Docker-0F1B2D)
 ![contract](https://img.shields.io/badge/validate__output-CONTRACT%20OK-0E9F8E)
 ![offline](https://img.shields.io/badge/runtime-offline%20%C2%B7%20CPU%20%C2%B7%20no%20LLM-0F1B2D)
-![stage](https://img.shields.io/badge/stage-S3%20hardened-F2A900)
+![stage](https://img.shields.io/badge/stage-S4%20backend%20complete-F2A900)
+![privacy](https://img.shields.io/badge/attack%20resistance-0.914-0E9F8E)
 
-> **Status: Stage 3.** Detection in three scripts and every hiding place, cross-script
-> linkage, per-patient date shifting and generalisation are live and fuzz-tested on unseen formats. k-anonymity and the measured attack arrive
-> in S4 (see [docs/CHANGELOG.md](docs/CHANGELOG.md)). Numbers below are measured, not projected.
+> **Status: Stage 4, backend complete.** Detection in three scripts and every hiding place,
+> cross-script linkage, measured privacy (our A1–A7 attacker, resistance 0.914) and the full
+> FastAPI service are live and fuzz-tested on unseen formats. The Next.js console is next (S5).
 
 ## Quickstart
 
@@ -93,15 +94,16 @@ The design is detailed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Measured results (practice data)
 
-| Metric | S0 baseline | S3 |
+| Metric | S0 baseline | S4 (balanced default) |
 |---|---|---|
 | PII still visible (`check_dev`): all / latin / deva / hinglish | 84.1% / 82.8 / 100 / 100% | **0.0% / 0 / 0 / 0%** |
 | PII in file names, base64, metadata, keys, headers | 100% | **0%** |
 | Canaries found | 4 / 4 | **0 / 4** |
-| Medical values kept · non-PII words kept (clean docs) | 100% | **100%** (4,855 / 4,855) · **99.66%** (100%) |
+| Medical values kept · non-PII words kept | 100% | **98.1%** (100% of doses, labs, vitals, diagnoses; district text generalised) · **97.4%** |
+| **Attack resistance** (A1–A7, ratios to raw) | 0 | **0.914** · profile re-id 98% → 2% · targeted 82% → 27% |
 | Linking precision / recall / F0.5 · false merges | 0 / 0 / 0 | **1.00 / 0.99 / 1.00 · 0** |
 | **Unseen formats** (3 fuzz variants: new names, headers, labels, encodings + 13 novel templates) | n/a | **0 leaks · 100% medical · F0.5 0.99 · 0 false merges** |
-| Bench, 2 pinned CPUs + 4 GB cap: 200 / 1,245 files | n/a | **2.3 s · 41 MB / 12.1 s · 58 MB** (linear) |
+| Bench, 2 pinned CPUs + 4 GB cap: 200 / 1,245 files | n/a | **2.5 s · 41 MB / 13.9 s · 59 MB** (linear) |
 | Length of stay preserved | n/a | **20 / 20** |
 | Determinism · other secret | identical · no change | **identical · 0 / 48 pseudonyms reused** |
 | Runtime · peak RSS (limits 900 s · 4,096 MB) | 0.22 s · 30 MB | **2.6 s · 31 MB** |
@@ -126,12 +128,14 @@ containers. See [docs/API.md](docs/API.md#security-controls). The pipeline itsel
 
 More detail is in [docs/SECURITY.md](docs/SECURITY.md) and [docs/PRIVACY_MODEL.md](docs/PRIVACY_MODEL.md).
 
-## Policy knobs
+## Policy knobs and presets
 
 All privacy settings live in [`config/policy.yaml`](config/policy.yaml): shift range,
 weekday handling, age-band width and top-code, DOB policy, location targets, PIN digits,
 k, quasi-identifiers, escalation order, linkage thresholds and ingest limits.
-`ANAMIKA_POLICY=path.yaml` selects an alternative preset.
+`ANAMIKA_POLICY=path.yaml` selects an alternative preset. `config/presets/` ships three measured
+presets: `research` (tehsil, 5-year bands, resistance 0.627), `balanced` (default, state, 10-year bands, no DOB,
+0.914) and `strict` (20-year bands, rare conditions → ICD chapter, 0.917). See [docs/PRIVACY_MODEL.md](docs/PRIVACY_MODEL.md).
 
 ## Declared models
 
@@ -148,16 +152,18 @@ listed here with its parameter count, and shipped in `models/`.
 | `backend/tools/determinism.py` | same-secret byte identity, secret rotation, secret/temp hygiene, input untouched |
 | `backend/tools/fuzz_gen.py` | unseen-format variants with a consistent answer key (scored by `check_dev.py --truth`) |
 | `backend/tools/bench.sh` | wall time and peak RSS under 2 pinned CPUs and a 4 GB cap |
+| `backend/tools/attacker.py` | A1–A7 attack arena on raw vs release (privacy measurement) |
 | `backend/tools/utility_check.py` | preserve-probes by kind and token retention (over-redaction detector) |
 | `--debug-spans DIR` | value-free span / role / rule explanations per file, outside the release |
 | `backend/tools/md2pdf.py` | renders stage overviews and the brief to PDF (uv group `docs`) |
-| `uv run pytest` | 262 tests: pipeline units on synthetic strings + API security and job lifecycle |
+| `uv run pytest` | 269 tests: pipeline units on synthetic strings + API security and job lifecycle |
 
-## Limitations (honest, S3)
+## Limitations (honest, S4)
 
 - Fuzz variants and our 13 novel templates are ours; the organisers' sealed chaos catalogue can still surprise.
 - Phonetic name keys can collide for short names; they are used only with a second clue and under cannot-link constraints.
-- No k-anonymity escalation or measured re-identification risk yet; rare diagnoses and very old ages remain exposed to the targeted attack (S4).
+- Privacy is measured with our implementation of the published attacker; the organisers' code is sealed. The targeted attack still succeeds against about a quarter of known-fact targets, mostly through visit-date coincidences.
+- The balanced default trades district and DOB detail for privacy; use the `research` preset where that trade is wrong.
 - Unsupported formats (PDF, images, XML) and invalid-UTF-8 notes are quarantined rather than parsed, by design.
 
 ## Repository map

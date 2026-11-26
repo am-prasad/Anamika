@@ -47,3 +47,15 @@
 - `--debug-spans DIR`: value-free span / role / rule explanations outside the release.
 - Token-indexed lexicon matcher and cached classifiers: 1,245 files 20.4 s → 12.1 s (linear).
 - Practice: 0 leaks, 100% probes, 99.66% retention, link F0.5 1.00. Fuzz ×3 and novel templates: 0 leaks. 262 tests.
+
+## S4 · Privacy push and backend completion (2026-11-26)
+
+- `tools/attacker.py`: re-implementation of the published A1–A7 attacks on raw vs release (registry linkage, profile pooling, targeted known facts with global-shift recovery, pseudonym inversion, cross-release).
+- Fixed: FHIR `meta.lastUpdated` carried unshifted discharge dates (now shifted everywhere).
+- Policy knobs: `location.level` (tehsil | district | state), `ages.dob_policy` (shift | year | remove), `kanon.rare_k` (rare condition / procedure text → ICD chapter; ICD codes kept).
+- Presets `research`, `balanced` (default), `strict`, chosen from a measured privacy-utility grid. Default resistance 0.627 → **0.914**; profile re-identification 98% → 2%.
+- Linkage: Fellegi–Sunter score gate for weak (name-based) merges; linker records evidence-typed edges and pairs kept apart.
+- `--debug-spans` also writes `linkage.json` (identity graph, value-free).
+- API: per-job `policy`, `explain`, `utility`, `attack` options; `/explain`, `/graph`, demo-only `/compare` (refused in production), `/policy/presets`; datasets report `has_attacker`.
+- Docker end to end: one job with every option on the practice set (resistance 0.916, 0 leaks, 194/194 deterministic).
+- Tests: 269.

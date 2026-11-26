@@ -24,8 +24,13 @@ class JobOptions(BaseModel):
 
     release: str = Field("default", pattern=RELEASE_PATTERN,
                          description="release label; the per-release secret is derived from it")
+    policy: str | None = Field(None, pattern=r"^[a-z][a-z0-9_-]{0,31}$",
+                               description="privacy preset name (see /api/v1/policy/presets)")
     verify_determinism: bool = Field(False, description="re-run with the same and a rotated secret")
     leak_scan: bool = Field(False, description="scorer-style leak scan (datasets with an answer key)")
+    utility: bool = Field(False, description="preserve-probes and token retention (datasets with an answer key)")
+    attack: bool = Field(False, description="attack arena A1-A7 (datasets with an answer key and attacker files)")
+    explain: bool = Field(False, description="value-free span / role / linkage explanations for the console")
 
 
 class DatasetJobRequest(JobOptions):
@@ -41,7 +46,7 @@ class JobView(BaseModel):
     status: JobStatus
     source: str
     release: str
-    options: dict[str, bool]
+    options: dict[str, Any]
     created_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None

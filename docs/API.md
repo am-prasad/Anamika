@@ -47,13 +47,26 @@ Interactive docs are served at `/docs` outside production.
 | GET | `/api/v1/jobs/{id}/files` | sanitised files with size and SHA-256 | default |
 | GET | `/api/v1/jobs/{id}/files/{path}` | one sanitised file (attachment) | downloads |
 | GET | `/api/v1/jobs/{id}/archive` | release zip | downloads |
+| GET | `/api/v1/jobs/{id}/explain` | per-file detection summary (types, rule counts; needs `explain`) | default |
+| GET | `/api/v1/jobs/{id}/explain/{key}` | one file's value-free spans (offsets, types, rules), column / field roles | default |
+| GET | `/api/v1/jobs/{id}/graph` | identity graph: records, evidence-typed edges, pairs kept apart and why | default |
+| GET | `/api/v1/jobs/{id}/compare/{path}` | original + sanitised text + spans, **demo only** (`ANAMIKA_ALLOW_ORIGINALS`, server datasets, never in production) | downloads |
+| GET | `/api/v1/policy/presets` | privacy presets (level, band, PIN digits, DOB policy, rare k, measured numbers) | default |
+| GET | `/api/v1/policy?preset=name` | a preset's full policy | default |
 | DELETE | `/api/v1/jobs/{id}` | delete job and wipe its workspace | default |
 
 Job status moves `queued → running → succeeded | failed`. Errors are closed-vocabulary
 codes (`pipeline_failed`, `pipeline_timeout`, `service_not_configured`, …).
-Verification results: `determinism` (same secret, files identical), `rotation`
-(rotated secret: files changed, pseudonyms reused), and `leak_scan` (only for datasets
-that ship an answer key).
+Job options: `release`, `policy` (preset name), `verify_determinism`, `leak_scan`, `utility`,
+`attack`, `explain`. Verification results:
+- `determinism`: same secret, files identical.
+- `rotation`: rotated secret, files changed, pseudonyms reused.
+- `leak_scan`: scorer-style leak counts.
+- `utility`: preserve-probes by kind, token retention.
+- `attack`: A1–A7 risks vs raw, resistance.
+
+`leak_scan`, `utility` and `attack` need a dataset that ships an answer key (and, for `attack`,
+the attacker registry). Otherwise they return `{"available": false}`.
 
 ## Security controls
 

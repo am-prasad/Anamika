@@ -71,6 +71,11 @@ def parse_file(rel: str, raw: bytes, sha: str, policy: Mapping[str, Any]) -> Ite
     return Item(rel, sha, "text", text, ["doc"], order)
 
 
+def rid_of(r: Record) -> str:
+    """Record id of an exported record (input path + locator)."""
+    return r.rid_key
+
+
 def _json_locs(data: Any) -> list[str]:
     """``doc`` for the whole document, plus a pointer per record of any record collection."""
     ptrs = record_pointers(data)
@@ -147,12 +152,22 @@ def run(inp: Path, out: Path, policy: Mapping[str, Any], keys: Keyring,
             _write_debug(debug_dir, entry, pipe.explain(item))
         for loc in item.locs:
             r = rid(item.rel, loc)
-            report.records.append(Record(file=entry.output, loc=loc, patient=pipe.psn.get(r),
-                                         status="generalized" if r in pipe.generalized else None))
+            rec = Record(file=entry.output, loc=loc, patient=pipe.psn.get(r),
+                         status="generalized" if r in pipe.generalized else None)
+            rec.rid_key = r
+            report.records.append(rec)
 
     set_stage("report")
+    if debug_dir is not None:
+        import json
+
+        outputs = {it.rel: e.output for e, it in parsed if it is not None and e.output}
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        (debug_dir / "linkage.json").write_text(json.dumps(pipe.linkage_graph(outputs), indent=1),
+                                                encoding="utf-8")
     report.entities.update(pipe.entities)
     report.records_generalized = sum(r.status == "generalized" for r in report.records)
+    report.records_suppressed = sum(1 for r in report.records if rid_of(r) in pipe.suppressed)
     for entry in entries:
         if entry.status == "quarantined":
             LOG.emit("file.quarantined", sha=sha_prefix(entry.input_sha256), reason=entry.reason)

@@ -1,0 +1,45 @@
+# Anamika privacy policy: every privacy / utility knob lives here.
+# The pipeline never hardcodes these values; change them here and re-run.
+# Preset "strict".
+
+version: 2
+description: "Strict: state-level location, 20-year bands, DOB removed, rare conditions -> ICD chapter"
+
+dates:
+  # One secret, per-patient offset (HMAC of the pseudonym) applied to EVERY date of that
+  # patient, so intervals and length of stay are preserved exactly.
+  shift_min_days: 30          # |offset| is never smaller than this
+  shift_max_days: 365         # |offset| is never larger than this
+  shift_multiple_of_7: false  # true keeps weekday; false hides it
+
+ages:
+  band_years: 20              # 40-49; the band always contains the true age
+  top_code: 90                # ages >= 90 collapse to "90+"
+  dob_policy: remove          # shift (per-patient offset) | year | remove  (FHIR birthDate dropped)
+
+location:
+  level: state                # village/tehsil/district generalised up to: tehsil | district | state
+  pin_digits: 0               # 6 = keep, 3 = keep true prefix, 0 = remove
+
+kanon:
+  rare_k: 4                   # condition / procedure texts held by < rare_k patients -> ICD chapter (0 = off)
+
+linkage:
+  max_cluster_size: 5000      # sanity guard against runaway merges (lab rows make big clusters)
+  fs_threshold: 12.0          # Fellegi-Sunter log2 score needed for a weak (name-based) link
+
+ingest:
+  max_json_depth: 200         # deeper JSON is quarantined (json_too_deep)
+  max_file_mb: 512
+  supported_extensions: [".csv", ".tsv", ".json", ".txt"]
+
+output:
+  pseudonym_prefix: "PSN-"
+
+# Measured on the practice data with tools/attacker.py + check_dev.py + tools/utility_check.py
+measured:
+  resistance: 0.917
+  profile_reid_ratio: 0.02
+  targeted_ratio: 0.33
+  medical_values_kept: 0.974
+  token_retention: 0.972

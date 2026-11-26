@@ -87,3 +87,24 @@
 ## ADR-019 · Token-indexed lexicon matching
 **Decision:** names, IDs and places are matched by tokenising once and looking up sets (multi-word places through a first-word index), instead of compiling growing regex alternations.
 **Why:** runtime grew super-linearly with lexicon size; the token index made it linear (exponent ≈ 0.91) and 40% faster on 1,245 files.
+
+## ADR-020 · Measure privacy with our own implementation of the published attacker
+**Decision:** `tools/attacker.py` implements A1–A7 as specified and reports ratios to raw.
+**Why:** privacy is 25 points and cannot be tuned blind. The method is public (Kerckhoffs) even though the code is sealed.
+
+## ADR-021 · Default to state-level location, 10-year bands and no DOB
+**Decision:** the `balanced` preset is the default.
+**Alternatives:** tehsil / district level with 5-year bands and a shifted DOB (the "reference" style).
+**Why:** measured resistance 0.627 → 0.914 for about 1 utility point. District + gender + band + birth year was near-unique in a registry of about 30 people per district. Clinical values, intervals and LOS are untouched.
+
+## ADR-022 · Rare-condition suppression is opt-in
+**Decision:** `kanon.rare_k` = 0 by default; 4 in `strict`. Only diagnosis / procedure texts are eligible, and ICD codes are always kept.
+**Why:** it did not reduce the measured targeted-attack success (driven by dates and hospital), and the first version cost 12% of preserve-probes.
+
+## ADR-023 · Fellegi–Sunter gate on weak merges
+**Decision:** name-based keys merge only when the FS log2 score over shared fields reaches `fs_threshold` (12).
+**Why:** a same-name, same-village pair with a gender clash scores 8.3 and is refused, while a cross-script record with matching age scores 13.9 and links. It is explainable and auditable.
+
+## ADR-024 · Originals are served only in demo mode, never in production
+**Decision:** `/compare` returns original text only when `ANAMIKA_ALLOW_ORIGINALS=true`, for server-side datasets, and the setting is refused at start-up in production.
+**Why:** the console needs side-by-side views of synthetic data. A raw-data endpoint must not exist in a real deployment.

@@ -41,12 +41,17 @@ class RuntimeLexicon:
     places: set[str] = field(default_factory=set)        # village / locality / house values
     protected: set[str] = field(default_factory=set)     # doctor, tehsil, district tokens
     protected_deva: set[str] = field(default_factory=set)
+    districts: set[str] = field(default_factory=set)     # casefolded district names
+    tehsils: set[str] = field(default_factory=set)       # casefolded tehsil names
+    keep_tehsil: bool = True                             # policy: location.level == "tehsil"
+    keep_district: bool = True                           # policy: location.level != "state"
     lower_vocab: set[str] = field(default_factory=set)
     safe_vocab: set[str] = field(default_factory=set)
     _compiled: bool = False
 
     def __post_init__(self) -> None:
         self.name_rx = self.deva_rx = self.id_rx = self.core_rx = self.place_rx = None
+        self.tehsil_rx = None
 
     # ---------------------------------------------------------------- feeding
     def add_name(self, value: str) -> None:
@@ -81,6 +86,17 @@ class RuntimeLexicon:
         for tok in _DEVA.findall(value or ""):
             self.protected_deva.add(tok)
 
+    def add_admin(self, value: str, kind: str) -> None:
+        """Register a district (``kind="district"``) or tehsil name (also protected as a name)."""
+        v = " ".join((value or "").split()).casefold().strip(" .,")
+        if len(v) >= 3:
+            (self.districts if kind == "district" else self.tehsils).add(v)
+        self.add_protected(value)
+
+    def tehsil_only(self) -> set[str]:
+        """Tehsil names that are not also district names (redacted at district level)."""
+        return {t for t in self.tehsils if t not in self.districts}
+
     def add_safe_phrase(self, value: str) -> None:
         """Register clinical / administrative vocabulary seen in non-PII fields."""
         for tok in _LAT.findall(value or ""):
@@ -105,6 +121,9 @@ class RuntimeLexicon:
             toks = p.split()
             first.setdefault(toks[0], []).append(p)
         self.place_first = {k: sorted(v, key=len, reverse=True) for k, v in first.items()}
+        teh = sorted(self.tehsil_only() | (set() if self.keep_district else self.districts),
+                     key=lambda x: (-len(x), x))
+        self.tehsil_rx = _alt(teh, r"(?<![\w\u0900-\u097F])", r"(?![\w\u0900-\u097F])", re.IGNORECASE)
         names = sorted(self.name_latin,
                        key=lambda s: (-len(s), s))
         self.name_rx = _alt(names, r"(?<![A-Za-z])", r"(?![A-Za-z])", re.IGNORECASE)

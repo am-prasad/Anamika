@@ -9,19 +9,20 @@
 ## S3 (done)
 - [x] 13 novel templates, utility audit, `--debug-spans`, token-indexed matcher
 
-## S4 (awaiting go-ahead)
-- [ ] Own attacker (A2–A5) on raw vs release
-- [ ] k-anonymity escalation for rare records
-- [ ] Policy presets + privacy-utility curve
-- [ ] Fellegi–Sunter scoring for weak pairs
+## S4 (done)
+- [x] Own attacker (A1–A7) on raw vs release
+- [x] Location level / DOB policy / rare-value suppression (measured)
+- [x] Policy presets + privacy-utility grid
+- [x] Fellegi–Sunter gate for weak pairs
+- [x] API: explain, graph, compare (demo), presets, utility / attack verification
 
-## Service layer
-- [ ] Policy presets per job (Strict / Balanced / Research) via `ANAMIKA_POLICY`
-- [ ] `--debug-spans` export endpoint for the console (S3)
-- [ ] Attacker endpoint once `backend/tools/attacker.py` exists (S4)
-- [ ] Remind the user about their frontend strategy BEFORE starting the frontend stage
+## S5 (frontend, awaiting go-ahead)
+- [ ] Ask the user for their frontend strategy before starting (Next.js)
+
+## Service layer (done in S4)
+- [x] Policy presets per job, explain / graph endpoints, attack / utility verification
+- [x] Remind the user about their frontend strategy BEFORE starting the frontend stage (tracked in S5)
 
 ## Later
-- [ ] Fuzz generator (unseen schemas, Hindi headers, encodings, broken files)
-- [ ] Own attacker (A2–A5) + risk metrics
-- [ ] Bench script under `taskset -c 0,1` and memory limit
+- [ ] Optional: CRF name model trained on fuzz data (only if it beats the rule engine on held-out fuzz)
+- [ ] Optional: attacker speed-up (currently ~2 min per raw-vs-release run)
