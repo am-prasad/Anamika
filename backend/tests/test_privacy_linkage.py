@@ -155,8 +155,13 @@ def dataset(tmp_path: Path) -> Path:
     return inp
 
 
-def run(inp: Path, out: Path, secret: str) -> subprocess.CompletedProcess:
+PRESETS = REPO.parent / "config" / "presets"
+
+
+def run(inp: Path, out: Path, secret: str, preset: str | None = "research") -> subprocess.CompletedProcess:
     env = dict(os.environ, RAKSHA_SECRET=secret)
+    if preset:
+        env["ANAMIKA_POLICY"] = str(PRESETS / f"{preset}.yaml")
     return subprocess.run([sys.executable, str(REPO / "main.py"), "--input", str(inp), "--output", str(out)],
                           env=env, capture_output=True, text=True)
 
@@ -185,6 +190,16 @@ def test_end_to_end_release(dataset: Path, tmp_path: Path) -> None:
     a, b = [h.value for h in find_dates(note)]
     assert (b - a).days == 9 and a != dt.date(2026, 10, 3)
     assert PHONE not in str(json.loads((out / "report.json").read_text()))
+
+
+def test_balanced_default_generalises_location_dob_and_age(dataset: Path, tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    assert run(dataset, out, "s1-test", preset=None).returncode == 0
+    blob = "\n".join(f.read_text(encoding="utf-8") for f in (out / "sanitized").rglob("*") if f.is_file())
+    for gone in ("Lalganj", "Rae Bareli", "229206", "229***", "1973", "04/12/1973", "Rampura Khas"):
+        assert gone not in blob
+    assert "50-59" in blob and "650 mg 1-0-1 x 5 days" in blob and "BP 150/90" in blob
+    assert "Dr. Bhavika Tandel" in blob
 
 
 def test_secret_rotation_changes_pseudonyms_and_dates(dataset: Path, tmp_path: Path) -> None:
