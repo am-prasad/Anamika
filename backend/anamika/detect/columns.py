@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from functools import lru_cache
 from typing import Iterable, Sequence
 
 from .patterns import EMAIL_RX, PHONE_RX, ascii_digits
@@ -30,6 +31,7 @@ TEHSIL, DISTRICT, STATE, PIN = "tehsil", "district", "state", "pin"
 PHONE, EMAIL, AADHAAR, ABHA, ABHA_ADDRESS, PAN = "phone", "email", "aadhaar", "abha", "abha_address", "pan"
 MRN, INSURANCE, DOB, AGE, AGE_SEX, GENDER, DATE = "mrn", "insurance", "dob", "age", "age_sex", "gender", "date"
 DOCTOR, FACILITY, PERSON_NAME, TEXT, KEEP = "doctor", "facility", "person_name", "text", "keep"
+CLINICAL = "clinical"
 
 #: roles whose value is replaced outright
 REPLACE_ROLES = {PATIENT_NAME, FIRST_NAME, LAST_NAME, LOCAL_NAME, RELATIVE_NAME, GUARDIAN,
@@ -91,6 +93,11 @@ _SYNONYMS: list[tuple[str, set[str], tuple[str, ...]]] = [
      ("address", "niwas", "पता")),
     (AGE, {"age", "umar", "उम्र", "आयु", "ageyears", "ageyrs", "ageinyears", "aayu", "ayu", "umr"}, ()),
     (GENDER, {"gender", "sex", "ling", "लिंग"}, ()),
+    (CLINICAL, {"diagnosis", "dx", "condition", "disease", "complaint", "complaints", "chiefcomplaint",
+                "test", "testname", "investigation", "result", "unit", "units", "drug", "medicine",
+                "medication", "dose", "frequency", "duration", "procedure", "department", "ward",
+                "निदान", "बीमारी", "रोग", "शिकायत", "दवा", "जांच", "विभाग", "icd", "icdcode", "loinc",
+                "shikayat", "bimari", "nidan", "dawai"}, ("diagnosis", "complaint", "निदान")),
 ]
 
 _ID_OWNER = {"pt", "patient", "pat", "hosp", "hospital", "reg", "regn", "registration", "uhid", "mrn",
@@ -113,6 +120,7 @@ def normalise_label(label: str) -> str:
     return s.replace("_", "")
 
 
+@lru_cache(maxsize=65536)
 def classify_label(label: str) -> str | None:
     """Role for a header / key, or ``None`` when the name alone is not conclusive."""
     n = normalise_label(label)
@@ -208,6 +216,9 @@ def profile_people_places(values: Sequence[str], is_common: "callable[[str], boo
     shaped = [v for v in vals if _NAME_SHAPE.match(v)]
     if len(shaped) / n < 0.8 or distinct < 0.3:
         return None
+    deva_only = all(not re.search(r"[A-Za-z]", v) for v in shaped)
+    if deva_only and (distinct < 0.8 or not any(len(v.split()) >= 2 for v in shaped)):
+        return None  # a repeated Devanagari word is a category (मधुमेह), not a person
     lat = [t for v in shaped for t in re.findall(r"[A-Za-z]{3,}", v) if t.upper() not in ("S", "D", "W", "C")]
     if lat and sum(1 for t in lat if is_common(t)) / len(lat) > 0.2:
         return None

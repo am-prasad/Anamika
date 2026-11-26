@@ -9,13 +9,13 @@ export metadata and base64 attachments. Every medical value stays exactly as it 
 The same patient gets one keyed pseudonym across files, scripts and hospitals. The output is
 generalised so that a voter-list attacker cannot single anyone out.
 
-![tests](https://img.shields.io/badge/tests-224%20passing-0E9F8E)
+![tests](https://img.shields.io/badge/tests-262%20passing-0E9F8E)
 ![api](https://img.shields.io/badge/API-FastAPI%20%C2%B7%20Docker-0F1B2D)
 ![contract](https://img.shields.io/badge/validate__output-CONTRACT%20OK-0E9F8E)
 ![offline](https://img.shields.io/badge/runtime-offline%20%C2%B7%20CPU%20%C2%B7%20no%20LLM-0F1B2D)
-![stage](https://img.shields.io/badge/stage-S2%20v1--safe-F2A900)
+![stage](https://img.shields.io/badge/stage-S3%20hardened-F2A900)
 
-> **Status: Stage 2 (`v1-safe`).** Detection in three scripts and every hiding place, cross-script
+> **Status: Stage 3.** Detection in three scripts and every hiding place, cross-script
 > linkage, per-patient date shifting and generalisation are live and fuzz-tested on unseen formats. k-anonymity and the measured attack arrive
 > in S4 (see [docs/CHANGELOG.md](docs/CHANGELOG.md)). Numbers below are measured, not projected.
 
@@ -93,15 +93,15 @@ The design is detailed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Measured results (practice data)
 
-| Metric | S0 baseline | S2 (`v1-safe`) |
+| Metric | S0 baseline | S3 |
 |---|---|---|
 | PII still visible (`check_dev`): all / latin / deva / hinglish | 84.1% / 82.8 / 100 / 100% | **0.0% / 0 / 0 / 0%** |
 | PII in file names, base64, metadata, keys, headers | 100% | **0%** |
 | Canaries found | 4 / 4 | **0 / 4** |
-| Medical values kept | 100% | **100%** (4,855 / 4,855) |
+| Medical values kept · non-PII words kept (clean docs) | 100% | **100%** (4,855 / 4,855) · **99.66%** (100%) |
 | Linking precision / recall / F0.5 · false merges | 0 / 0 / 0 | **1.00 / 0.99 / 1.00 · 0** |
-| **Unseen formats** (3 fuzz variants: new names, headers, labels, encodings, templates) | n/a | **0 leaks · 100% medical · F0.5 0.99 · 0 false merges** |
-| Bench, 2 pinned CPUs + 4 GB cap: 200 / 1,245 files | n/a | **2.6 s · 43 MB / 20.4 s · 63 MB** |
+| **Unseen formats** (3 fuzz variants: new names, headers, labels, encodings + 13 novel templates) | n/a | **0 leaks · 100% medical · F0.5 0.99 · 0 false merges** |
+| Bench, 2 pinned CPUs + 4 GB cap: 200 / 1,245 files | n/a | **2.3 s · 41 MB / 12.1 s · 58 MB** (linear) |
 | Length of stay preserved | n/a | **20 / 20** |
 | Determinism · other secret | identical · no change | **identical · 0 / 48 pseudonyms reused** |
 | Runtime · peak RSS (limits 900 s · 4,096 MB) | 0.22 s · 30 MB | **2.6 s · 31 MB** |
@@ -148,12 +148,14 @@ listed here with its parameter count, and shipped in `models/`.
 | `backend/tools/determinism.py` | same-secret byte identity, secret rotation, secret/temp hygiene, input untouched |
 | `backend/tools/fuzz_gen.py` | unseen-format variants with a consistent answer key (scored by `check_dev.py --truth`) |
 | `backend/tools/bench.sh` | wall time and peak RSS under 2 pinned CPUs and a 4 GB cap |
+| `backend/tools/utility_check.py` | preserve-probes by kind and token retention (over-redaction detector) |
+| `--debug-spans DIR` | value-free span / role / rule explanations per file, outside the release |
 | `backend/tools/md2pdf.py` | renders stage overviews and the brief to PDF (uv group `docs`) |
-| `uv run pytest` | 224 tests: pipeline units on synthetic strings + API security and job lifecycle |
+| `uv run pytest` | 262 tests: pipeline units on synthetic strings + API security and job lifecycle |
 
-## Limitations (honest, S2)
+## Limitations (honest, S3)
 
-- Fuzz variants reuse the practice templates (plus three novel ones), so the organisers' chaos round can still surprise.
+- Fuzz variants and our 13 novel templates are ours; the organisers' sealed chaos catalogue can still surprise.
 - Phonetic name keys can collide for short names; they are used only with a second clue and under cannot-link constraints.
 - No k-anonymity escalation or measured re-identification risk yet; rare diagnoses and very old ages remain exposed to the targeted attack (S4).
 - Unsupported formats (PDF, images, XML) and invalid-UTF-8 notes are quarantined rather than parsed, by design.

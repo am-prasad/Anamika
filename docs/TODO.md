@@ -6,11 +6,14 @@
 ## S2 (done)
 - [x] Fuzz generator + unseen-format runs, cross-script linkage, fragment linkage, bench, tag `v1-safe`
 
-## S3 (awaiting go-ahead)
-- [ ] 10+ novel template shapes in the fuzz set
-- [ ] Precision audit on clean docs and meaning-trap probes under fuzz
-- [ ] `--debug-spans` export for the console
-- [ ] Token-indexed lexicon matcher (growth exponent ≤ 1.1)
+## S3 (done)
+- [x] 13 novel templates, utility audit, `--debug-spans`, token-indexed matcher
+
+## S4 (awaiting go-ahead)
+- [ ] Own attacker (A2–A5) on raw vs release
+- [ ] k-anonymity escalation for rare records
+- [ ] Policy presets + privacy-utility curve
+- [ ] Fellegi–Sunter scoring for weak pairs
 
 ## Service layer
 - [ ] Policy presets per job (Strict / Balanced / Research) via `ANAMIKA_POLICY`

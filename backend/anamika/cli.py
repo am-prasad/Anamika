@@ -84,7 +84,8 @@ def _safe_dest(san: Path, rel: str) -> Path:
     return dest
 
 
-def run(inp: Path, out: Path, policy: Mapping[str, Any], keys: Keyring) -> int:
+def run(inp: Path, out: Path, policy: Mapping[str, Any], keys: Keyring,
+        debug_dir: Path | None = None) -> int:
     """Run the full pipeline from ``inp`` to ``out``; return the process exit code."""
     t0 = time.monotonic()
     san = out / "sanitized"
@@ -142,6 +143,8 @@ def run(inp: Path, out: Path, policy: Mapping[str, Any], keys: Keyring) -> int:
             entry.reason = f"parse_error.{type(exc).__name__.lower()}"
             continue
         entry.status, entry.output, entry.reason = "sanitized", f"sanitized/{out_rel}", None
+        if debug_dir is not None:
+            _write_debug(debug_dir, entry, pipe.explain(item))
         for loc in item.locs:
             r = rid(item.rel, loc)
             report.records.append(Record(file=entry.output, loc=loc, patient=pipe.psn.get(r),
@@ -167,6 +170,15 @@ def run(inp: Path, out: Path, policy: Mapping[str, Any], keys: Keyring) -> int:
     return 0
 
 
+def _write_debug(debug_dir: Path, entry: FileEntry, info: dict) -> None:
+    """One value-free JSON per exported file, named by input SHA prefix (never by file name)."""
+    import json
+
+    debug_dir.mkdir(parents=True, exist_ok=True)
+    info = {"input_sha256": entry.input_sha256, "output": entry.output, **info}
+    (debug_dir / f"{entry.input_sha256[:16]}.json").write_text(json.dumps(info, indent=1), encoding="utf-8")
+
+
 class _QuietParser(argparse.ArgumentParser):
     def error(self, message: str) -> None:  # never echo argument values
         LOG.emit("args.invalid", problem="usage")
@@ -179,6 +191,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = _QuietParser(prog="anamika", description="Anamika privacy firewall")
     ap.add_argument("--input", required=True)
     ap.add_argument("--output", required=True)
+    ap.add_argument("--debug-spans", default=None,
+                    help="write value-free span/role explanations here (must be outside --output)")
     args = ap.parse_args(argv)
     inp, out = Path(args.input).resolve(), Path(args.output).resolve()
     if not inp.is_dir():
@@ -192,4 +206,8 @@ def main(argv: list[str] | None = None) -> int:
     except SecretMissing:
         LOG.emit("secret.missing")
         return 2
-    return run(inp, out, pol.load_policy(), keys)
+    debug = Path(args.debug_spans).resolve() if args.debug_spans else None
+    if debug is not None and (debug == out or out in debug.parents or debug == inp or inp in debug.parents):
+        LOG.emit("args.invalid", problem="debug_dir_inside_output_or_input")
+        return 2
+    return run(inp, out, pol.load_policy(), keys, debug)

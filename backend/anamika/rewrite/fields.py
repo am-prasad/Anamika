@@ -12,6 +12,7 @@ A field's *role* (from :mod:`anamika.detect.columns`) decides its fate:
 from __future__ import annotations
 
 import re
+from functools import lru_cache
 from typing import Any
 
 from ..detect import columns as C
@@ -74,6 +75,7 @@ CLINICAL_KEYS = {"test", "display", "drug", "department", "procedure", "diagnosi
                  "strength", "duration", "panel", "reporttype", "system", "title", "type"}
 
 
+@lru_cache(maxsize=65536)
 def norm_key(k: str) -> str:
     """Normalised JSON key for context matching."""
     return re.sub(r"[^a-z0-9]", "", (k or "").casefold())
@@ -81,6 +83,11 @@ def norm_key(k: str) -> str:
 
 def person_context(path: list[str], resource: str | None) -> str | None:
     """``patient`` / ``relative`` / ``doctor`` / ``nonperson`` from the nearest ancestor."""
+    return _person_context(tuple(path), resource)
+
+
+@lru_cache(maxsize=65536)
+def _person_context(path: tuple[str, ...], resource: str | None) -> str | None:
     for k in reversed(path):
         n = norm_key(k)
         if n in RELATIVE_CTX:

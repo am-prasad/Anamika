@@ -31,3 +31,14 @@ re-encoded). All of them go through the same detector.
 Five starter-equivalent regexes (`detect/patterns.py::BASELINE_RULES`) give a reference point
 for measuring every improvement. The Verhoeff checksum is implemented and tested, ready for
 S1 confidence boosting.
+
+## Status after S3
+
+All layers above are live. Additions since S0:
+- **Run-time lexicon** with token-indexed matching.
+- **Field classifier reused in text** (`label: value`, `label - value`, `|` segments, `<tag>value</tag>`).
+- **Value profiling** for name and address columns, and a pinned **clinical** role.
+- Kinship words, `resident of` / `r/o` / `निवासी`, Hinglish particles, the subject of `<name>, W/o <husband>`.
+- Voter ID, STD landlines and masked mobiles.
+
+Measured on practice, fuzz and 13 novel templates: 0 leaks, 100% preserve-probes, 99.66% token retention.

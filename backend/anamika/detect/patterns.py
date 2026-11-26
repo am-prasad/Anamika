@@ -45,6 +45,9 @@ RULES: tuple[PatternRule, ...] = (
     PatternRule("phone.in", "PHONE", re.compile(
         r"(?<![0-9A-Za-z])(?:(?:\+|00)?91[\s.-]?|0)?[6-9](?:[\s.-]?\d){9}(?![0-9A-Za-z])")),
     PatternRule("abha.plain", "ABHA_NUMBER", re.compile(_NB + r"\d{14}" + _NA)),
+    PatternRule("phone.masked", "PHONE", re.compile(r"(?i)" + _NB + r"[6-9]\d[x*]{4,6}\d{2,4}" + _NA)),
+    PatternRule("phone.landline", "PHONE", re.compile(r"(?<![\d-])0\d{2,4}[\s-]\d{6,8}(?![\d-])")),
+    PatternRule("voter.epic", "VOTER_ID", re.compile(_NB + r"[A-Z]{3}\d{7}" + _NA)),
     PatternRule("pan", "PAN", re.compile(_NB + r"[A-Z]{3}[ABCFGHLJPTK][A-Z]\d{4}[A-Z]" + _NA)),
     PatternRule("pin.label", "PIN", re.compile(
         r"(?i)(?:PIN(?:\s*Code)?|Pincode|Zip|पिन(?:\s*कोड)?)\s*(?:No\.?)?\s*[:\-]?\s*([1-8]\d{5})" + _NA), 1),

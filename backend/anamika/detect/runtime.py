@@ -51,8 +51,8 @@ class RuntimeLexicon:
     # ---------------------------------------------------------------- feeding
     def add_name(self, value: str) -> None:
         """Register a person's name (any script)."""
-        for tok in _LAT.findall(value or ""):
-            t = tok.casefold().strip("'’")
+        for tok in re.findall(r"[A-Za-z]+", value or ""):
+            t = tok.casefold()
             if len(t) >= 3 and t not in L.GENERIC_NAME_TOKENS:
                 self.name_latin.add(t)
         for tok in _DEVA.findall(value or ""):
@@ -93,7 +93,18 @@ class RuntimeLexicon:
 
     # ---------------------------------------------------------------- compile
     def compile(self) -> None:
-        """Freeze the vocabularies into regular expressions."""
+        """Freeze the vocabularies into token indexes (and regexes for compatibility)."""
+        self.name_set = frozenset(self.name_latin)
+        self.deva_set = frozenset(self.name_deva)
+        self.id_set = frozenset(self.ids)
+        self.core_set = frozenset(self.id_cores)
+        first: dict[str, list[str]] = {}
+        for p in self.places:
+            if p in self.protected:
+                continue
+            toks = p.split()
+            first.setdefault(toks[0], []).append(p)
+        self.place_first = {k: sorted(v, key=len, reverse=True) for k, v in first.items()}
         names = sorted(self.name_latin,
                        key=lambda s: (-len(s), s))
         self.name_rx = _alt(names, r"(?<![A-Za-z])", r"(?![A-Za-z])", re.IGNORECASE)

@@ -304,6 +304,89 @@ def novel_templates(rng: random.Random) -> list[tuple[str, bytes, dict]]:
                 {"doc": _unit("doc", [_ent("PATIENT_NAME", name), _ent("PHONE", ph), _ent("VILLAGE", vill),
                                       _ent("RELATIVE_NAME", rel, role="relative")],
                               ["Tab Paracetamol 650 mg TDS x 3 days", "Dr. Kamal Nayan Bajaj"])}))
+    out += more_templates(rng, used)
+    return out
+
+
+def _person(rng: random.Random, used: set[str]) -> tuple[str, str, str]:
+    return (latin_name(rng, used) + " " + latin_name(rng, used),
+            rng.choice("6789") + "".join(str(rng.randrange(10)) for _ in range(9)),
+            latin_name(rng, used) + rng.choice(["pur", " Kalan", "ganj", " Khurd", "nagar"]))
+
+
+def _doc(rel: str, text: str, ents: list[dict], keep: list[str]) -> tuple[str, bytes, dict]:
+    return (rel, text.encode("utf-8"), {"doc": _unit("doc", ents, keep)})
+
+
+def more_templates(rng: random.Random, used: set[str]) -> list[tuple[str, bytes, dict]]:
+    """Ten more shapes the practice data never shows."""
+    out = []
+    n, p, v = _person(rng, used)
+    out.append(_doc("novel/hl7ish_record.txt",
+                    f"<patient><name>{n}</name><mobile>{p}</mobile><village>{v}</village>"
+                    "<dx>Acute gastroenteritis</dx><rx>ORS 1 sachet after each loose stool</rx></patient>\n",
+                    [_ent("PATIENT_NAME", n), _ent("PHONE", p), _ent("VILLAGE", v)],
+                    ["Acute gastroenteritis", "ORS 1 sachet after each loose stool"]))
+    n, p, v = _person(rng, used)
+    out.append(_doc("novel/register_caps.txt",
+                    f"PATIENT: {n.upper()}   AGE 61 M   PH {p}\nDIAGNOSIS: COPD WITH ACUTE EXACERBATION\n"
+                    "NEB SALBUTAMOL 2.5 MG QID\n",
+                    [_ent("PATIENT_NAME", n.upper()), _ent("PHONE", p)],
+                    ["COPD WITH ACUTE EXACERBATION", "NEB SALBUTAMOL 2.5 MG QID"]))
+    n, p, v = _person(rng, used)
+    out.append(_doc("novel/referral_letter.txt",
+                    f"Dear Dr. Mehta,\nI am referring Mrs. {n}, 52 yrs, resident of {v}, for evaluation of "
+                    f"exertional chest pain. ECG shows ST depression in V4-V6. Her phone is {p}.\n"
+                    "Regards,\nDr. Anupama Sinha\n",
+                    [_ent("PATIENT_NAME", n), _ent("VILLAGE", v), _ent("PHONE", p)],
+                    ["ECG shows ST depression in V4-V6", "Dr. Anupama Sinha", "Dear Dr. Mehta"]))
+    n, p, v = _person(rng, used)
+    son = latin_name(rng, used)
+    out.append(_doc("novel/sms_log.txt",
+                    f"Pt {n} admitted bed 4, contact son {son} on {p}. Plt 85000, NS1 +ve.\n",
+                    [_ent("PATIENT_NAME", n), _ent("RELATIVE_NAME", son, role="relative"), _ent("PHONE", p)],
+                    ["Plt 85000", "NS1 +ve"]))
+    n, p, v = _person(rng, used)
+    dn = deva_name(rng, used) + " " + deva_name(rng, used)
+    out.append(_doc("novel/mixed_script.txt",
+                    f"मरीज़ {dn} ({n}) को BP 140/90, Tab Telmisartan 40 mg OD शुरू किया।\n",
+                    [_ent("PATIENT_NAME", dn, "deva"), _ent("PATIENT_NAME", n)],
+                    ["BP 140/90", "Tab Telmisartan 40 mg OD"]))
+    n, p, v = _person(rng, used)
+    out.append(_doc("novel/hinglish_labels.txt",
+                    f"Mareez ka naam - {n}\nSampark no - {p}\nGaon - {v}\nShikayat - pet dard 2 din se\n",
+                    [_ent("PATIENT_NAME", n, "hinglish"), _ent("PHONE", p), _ent("VILLAGE", v)],
+                    ["pet dard 2 din se"]))
+    rows, units = [], {}
+    for i in range(3):
+        n, p, v = _person(rng, used)
+        rows.append(f"{n},{p},{v},Hypertension")
+        units[f"row:{i}"] = _unit(f"row:{i}", [_ent("PATIENT_NAME", n), _ent("PHONE", p), _ent("VILLAGE", v)],
+                                  ["Hypertension"])
+    out.append(("novel/no_header_list.csv", ("\n".join(["Name,Number,Place,Condition"] + rows) + "\n").encode(), units))
+    rows, units = ["नाम\tमोबाइल\tगांव\tनिदान"], {}
+    for i in range(3):
+        dn = deva_name(rng, used) + " " + deva_name(rng, used)
+        p = rng.choice("6789") + "".join(str(rng.randrange(10)) for _ in range(9))
+        vv = deva_name(rng, used) + "पुर"
+        rows.append(f"{dn}\t{p}\t{vv}\tमधुमेह")
+        units[f"row:{i}"] = _unit(f"row:{i}", [_ent("PATIENT_NAME", dn, "deva"), _ent("PHONE", p),
+                                               _ent("VILLAGE", vv, "deva")], ["मधुमेह"])
+    out.append(("novel/hindi_headers.tsv", ("\n".join(rows) + "\n").encode(), units))
+    n1, p1, v1 = _person(rng, used)
+    n2, p2, v2 = _person(rng, used)
+    out.append(("novel/array_rows.json", json.dumps({"columns": ["patient", "phone", "village", "dx"],
+                                                     "rows": [[n1, p1, v1, "Asthma"], [n2, p2, v2, "Anaemia"]]}).encode(),
+                {"doc": _unit("doc", [_ent("PATIENT_NAME", n1), _ent("PHONE", p1), _ent("VILLAGE", v1),
+                                      _ent("PATIENT_NAME", n2), _ent("PHONE", p2), _ent("VILLAGE", v2)],
+                              ["Asthma", "Anaemia"])}))
+    n, p, v = _person(rng, used)
+    out.append(("novel/insurance_claim.json", json.dumps({
+        "claim": {"insured_person": {"fullName": n, "mobileNumber": p, "policyNumber": f"PMJAY-UP-{p[:8]}"},
+                  "treatment": {"procedure": "Laparoscopic cholecystectomy", "amount": 42000}}}).encode(),
+                {"doc": _unit("doc", [_ent("PATIENT_NAME", n), _ent("PHONE", p),
+                                      _ent("INSURANCE_ID", f"PMJAY-UP-{p[:8]}")],
+                              ["Laparoscopic cholecystectomy"])}))
     return out
 
 

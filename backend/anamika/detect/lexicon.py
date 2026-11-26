@@ -26,6 +26,12 @@ PRE_TITLES_DEVA = r"(?:श्रीमती|श्री|कुमारी|स
 POST_HONORIFICS = r"(?:ji|jee|sahab|saab|sahib|didi|bhaiya|bhai|aunty|auntie|uncle|amma|behenji|babu|chacha|chachi|dada|dadi|nana|nani|mausi|bua)"
 POST_HONORIFICS_DEVA = r"(?:जी|साहब|दीदी|भैया|भाई|अम्मा|बाबू|चाचा|चाची|दादा|दादी)"
 
+#: kinship words followed directly by a name ("contact son Arvind", "बेटा राजू")
+KINSHIP = r"(?:son|daughter|wife|husband|father|mother|brother|sister|beta|beti|bhai|bahan|patni|pati|bahu|nephew|niece|uncle|grandson|granddaughter)"
+KINSHIP_DEVA = r"(?:बेटा|बेटी|पत्नी|पति|भाई|बहन|बहू|पिता|माता|मां)"
+#: Devanagari words for "patient" that may introduce a name without a colon
+PATIENT_WORDS_DEVA = r"(?:मरीज़|मरीज|रोगी)"
+
 #: Hinglish postpositions that follow a person ("Shahid ka BP", "Meera ne dawai li")
 HINGLISH_PARTICLES = r"(?:ka|ki|ke|ko|ne|se|kaa|kee)"
 
@@ -63,6 +69,7 @@ age sex yrs yr years year y m f male female uhid mrn reg regn no ipd ip opd mob 
 date dob address ward bed w s d c o h k s/o d/o w/o c/o ka ki ke ko ne se hai tha thi the
 patient name diagnosis admitted discharged in on at of and with for from to is was reviewed
 आयु उम्र वर्ष पुरुष महिला का की के को ने से है था थी पता मोबाइल तारीख पंजीकरण
+साथ आया आई आए गया गई यहाँ वहाँ और भी अभी आज कल में पर
 """.split())
 
 #: facility words: a capitalised phrase ending in one of these is an institution (kept)
