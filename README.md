@@ -9,7 +9,8 @@ export metadata and base64 attachments. Every medical value stays exactly as it 
 The same patient gets one keyed pseudonym across files, scripts and hospitals. The output is
 generalised so that a voter-list attacker cannot single anyone out.
 
-![tests](https://img.shields.io/badge/tests-51%20passing-0E9F8E)
+![tests](https://img.shields.io/badge/tests-77%20passing-0E9F8E)
+![api](https://img.shields.io/badge/API-FastAPI%20%C2%B7%20Docker-0F1B2D)
 ![contract](https://img.shields.io/badge/validate__output-CONTRACT%20OK-0E9F8E)
 ![offline](https://img.shields.io/badge/runtime-offline%20%C2%B7%20CPU%20%C2%B7%20no%20LLM-0F1B2D)
 ![stage](https://img.shields.io/badge/stage-S0%20recon%20%26%20scaffold-F2A900)
@@ -20,11 +21,31 @@ generalised so that a voter-list attacker cannot single anyone out.
 
 ## Quickstart
 
+**Offline CLI** (exactly what the evaluator runs; pipeline-only dependencies):
+
 ```bash
 pip install -r requirements.txt
-RAKSHA_SECRET=practice python main.py --input path/to/dev/input --output out
+RAKSHA_SECRET=practice python backend/main.py --input path/to/dev/input --output out
 python3 path/to/validate_output.py --input path/to/dev/input --output out   # CONTRACT OK
 ```
+
+**Development with uv** (pipeline + API + tests):
+
+```bash
+cd backend && uv sync --extra api --group docs
+uv run pytest                                   # 77 tests
+ANAMIKA_AUTH_DISABLED=true ANAMIKA_MASTER_SECRET=dev uv run uvicorn app.main:app --reload
+```
+
+**Service stack with Docker** (FastAPI API + arq workers + Redis):
+
+```bash
+cp .env.example .env            # set master secret, API-key hashes, Redis password
+docker compose up -d --build
+docker compose up -d --scale worker=3
+```
+
+API reference, security controls and scaling model: [docs/API.md](docs/API.md).
 
 The run needs no network. The secret is read from `RAKSHA_SECRET` only and never written
 anywhere. Output: `out/sanitized/` (a mirror of the input tree, UTF-8), `out/report.json`
@@ -43,6 +64,8 @@ flowchart LR
   W --> O[sanitized report records]
 ```
 
+Pipeline modules live in `backend/anamika/`.
+
 | Layer | Module | Role | Status |
 |---|---|---|---|
 | Safety | `anamika/safety.py` | PII-free logger, crash guards, HKDF keyring, AES-GCM temp | ✅ S0 |
@@ -52,6 +75,7 @@ flowchart LR
 | Privacy | `anamika/privacy/` | per-patient date shift, age bands, location, k-anonymity, rare-value suppression | primitives (S1–S4) |
 | Rewrite | `anamika/rewrite/` | format-preserving CSV / JSON / FHIR / text writers | baseline (S1–S3) |
 | Report | `anamika/report.py` | `report.json` + `records.jsonl` with counts derived from real output | ✅ S0 |
+| Service | `backend/app/` | FastAPI job API, Redis store/queue, arq workers, rate limits, sandboxed runs | ✅ |
 
 The design is detailed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -80,6 +104,10 @@ The design is detailed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 The full history is in [docs/SCORE_LOG.md](docs/SCORE_LOG.md).
 
 ## Security design
+
+The service layer adds hashed API keys, tenant isolation, Redis-backed rate limiting,
+upload and path guards, hardening headers, sandboxed no-egress workers and hardened
+containers. See [docs/API.md](docs/API.md#security-controls). The pipeline itself:
 
 - **Keys away from data.** `RAKSHA_SECRET` → HKDF-SHA256 → independent `pseudo`, `shift`,
   `file`, `enc`, `record` keys. Pseudonyms are `PSN-` + base32 of an HMAC, never a plain hash.
@@ -111,10 +139,10 @@ listed here with its parameter count, and shipped in `models/`.
 
 | Tool | Purpose |
 |---|---|
-| `tools/leak_scan.py` | scorer-style leak scan of the release and side channels; never prints values |
-| `tools/determinism.py` | same-secret byte identity, secret rotation, secret/temp hygiene, input untouched |
-| `tools/md2pdf.py` | renders stage overviews and the brief to PDF (`requirements-docs.txt`) |
-| `pytest` | 51 unit tests on synthetic strings |
+| `backend/tools/leak_scan.py` | scorer-style leak scan of the release and side channels; never prints values |
+| `backend/tools/determinism.py` | same-secret byte identity, secret rotation, secret/temp hygiene, input untouched |
+| `backend/tools/md2pdf.py` | renders stage overviews and the brief to PDF (uv group `docs`) |
+| `uv run pytest` | 77 tests: pipeline units on synthetic strings + API security and job lifecycle |
 
 ## Limitations (honest, S0)
 
@@ -125,6 +153,19 @@ listed here with its parameter count, and shipped in `models/`.
 
 ## Repository map
 
-`anamika/` pipeline · `config/` policy · `tools/` dev tooling · `tests/` unit tests ·
-`resources/` lexicons (synthetic/public only) · `training/`, `models/` (empty: no models) ·
-`dashboard/` demo console (S5, not a pipeline dependency) · `docs/` design notes and stage reports.
+```
+anamika/
+├── raksha.toml            evaluator entry (python backend/main.py)
+├── requirements.txt       evaluator deps → backend/requirements.txt (exported from uv.lock)
+├── config/policy.yaml     every privacy knob
+├── docker-compose.yml     API + workers + Redis, hardened
+├── backend/               uv project
+│   ├── main.py            offline CLI entry
+│   ├── anamika/           the pipeline (safety, ingest, detect, link, privacy, rewrite, report)
+│   ├── app/               FastAPI service (core/, api/routes/, services/, worker.py)
+│   ├── tools/             leak scan, determinism, md2pdf
+│   ├── tests/             pipeline + API tests
+│   └── resources/ training/ models/   lexicons; no models
+├── frontend/              Next.js console (not started)
+└── docs/                  design notes, ADRs, API, stage reports
+```

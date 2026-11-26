@@ -48,6 +48,6 @@ and LOS fields are never touched.
 
 ## Measured risk
 
-S4 adds `tools/attacker.py`, a re-implementation of the published A2–A5 attacks on our own
+S4 adds `backend/tools/attacker.py`, a re-implementation of the published A2–A5 attacks on our own
 output and on the raw input. It reports: share of patients uniquely re-identified before and
 after, the k distribution, and the targeted-attack success rate. S0 has no measurement yet.

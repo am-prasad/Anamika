@@ -21,12 +21,12 @@ learning one derived value gives no leverage over another.
 
 | Channel | Control | Verified by |
 |---|---|---|
-| stdout / stderr | `SafeLogger` whitelisted templates; argparse errors suppressed; warnings off | `tests/test_safety.py`, `tools/determinism.py` |
+| stdout / stderr | `SafeLogger` whitelisted templates; argparse errors suppressed; warnings off | `backend/tests/test_safety.py`, `backend/tools/determinism.py` |
 | crash output | `sys.excepthook`, `threading.excepthook` print class + stage only | subprocess test with PII in the message |
-| `report.json` | SHA-256 per file, closed-vocabulary reasons, counts only | `tools/leak_scan.py` |
-| `records.jsonl` | output paths + locators + pseudonyms | `tools/leak_scan.py` |
-| output file names | HMAC-renamed when the name holds PII (S1) | `tools/leak_scan.py` (`output_names`) |
-| TMPDIR / HOME | nothing written unless spilling; spill encrypted, `0700`, wiped at exit / error / SIGTERM | `tools/determinism.py` (leftover check) |
+| `report.json` | SHA-256 per file, closed-vocabulary reasons, counts only | `backend/tools/leak_scan.py` |
+| `records.jsonl` | output paths + locators + pseudonyms | `backend/tools/leak_scan.py` |
+| output file names | HMAC-renamed when the name holds PII (S1) | `backend/tools/leak_scan.py` (`output_names`) |
+| TMPDIR / HOME | nothing written unless spilling; spill encrypted, `0700`, wiped at exit / error / SIGTERM | `backend/tools/determinism.py` (leftover check) |
 
 ## Quarantine
 
@@ -39,4 +39,4 @@ listed by SHA-256 with a reason from a closed vocabulary (`unsupported_format`,
 ## Input integrity
 
 The input is opened read-only, the output may not sit inside the input tree, and
-`tools/determinism.py` re-hashes the input after three runs.
+`backend/tools/determinism.py` re-hashes the input after three runs.
