@@ -1,8 +1,9 @@
-"""Pattern detectors for structured identifiers.
+"""Pattern detectors for structured identifiers (applied to digit-normalised text).
 
-S0 ships the baseline set (phone, 12-digit Aadhaar-like, email, PAN, ``Name:`` label)
-plus the Verhoeff checksum used later to boost Aadhaar confidence. S1/S3 extend this
-module with ABHA, UHID/MRN label context, PIN, voter ID, Devanagari digits and dose vetoes.
+Every rule is anchored so that clinical numbers never match: a phone needs 10 digits
+starting 6–9 bounded by non-digits, an Aadhaar exactly 12, ABHA 14; doses (``650 mg``),
+frequencies (``1-0-1``), vitals (``117/82``) and lab values are far too short. Matching
+runs on text whose Devanagari digits were mapped to ASCII (same length, same offsets).
 """
 from __future__ import annotations
 
@@ -10,27 +11,47 @@ import re
 from dataclasses import dataclass
 from typing import Pattern
 
+_DEVA_DIGITS = {ord(c): str(i) for i, c in enumerate("०१२३४५६७८९")}
+
+
+def ascii_digits(text: str) -> str:
+    """Map Devanagari digits to ASCII; offsets are unchanged (1 char → 1 char)."""
+    return text.translate(_DEVA_DIGITS)
+
 
 @dataclass(frozen=True)
 class PatternRule:
-    """A typed regex rule. ``placeholder`` replaces the match in the output."""
+    """A typed regex rule. ``group`` selects the identifier inside the match."""
 
     rule_id: str
     entity: str
     regex: Pattern[str]
-    placeholder: str
+    group: int = 0
 
 
-BASELINE_RULES: tuple[PatternRule, ...] = (
-    PatternRule("phone.in10", "PHONE",
-                re.compile(r"(?<!\d)(?:\+?91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}(?!\d)"), "[PHONE]"),
-    PatternRule("aadhaar.12", "AADHAAR",
-                re.compile(r"(?<!\d)\d{4}[\s-]?\d{4}[\s-]?\d{4}(?!\d)"), "[AADHAAR]"),
-    PatternRule("email", "EMAIL", re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+"), "[EMAIL]"),
-    PatternRule("pan", "PAN", re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b"), "[PAN]"),
-    PatternRule("label.name", "PATIENT_NAME",
-                re.compile(r"(?i)(?<=name:)\s*[^\n,;|]+"), " [NAME]"),
+_NB = r"(?<![0-9A-Za-z])"   # not preceded by an alphanumeric
+_NA = r"(?![0-9A-Za-z])"    # not followed by an alphanumeric
+
+RULES: tuple[PatternRule, ...] = (
+    PatternRule("email", "EMAIL", re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")),
+    PatternRule("abha.address", "ABHA_ADDRESS",
+                re.compile(r"(?i)" + _NB + r"[a-z0-9._]{3,}@(?:abdm|sbx|ndhm)" + _NA)),
+    PatternRule("abha.number", "ABHA_NUMBER",
+                re.compile(_NB + r"\d{2}[\s-]\d{4}[\s-]\d{4}[\s-]\d{4}" + _NA)),
+    PatternRule("aadhaar.masked", "AADHAAR_MASKED",
+                re.compile(r"(?i)" + _NB + r"[x*]{4}[\s-]?[x*]{4}[\s-]?\d{4}" + _NA)),
+    PatternRule("aadhaar.spaced", "AADHAAR", re.compile(_NB + r"\d{4}[\s-]\d{4}[\s-]\d{4}" + _NA)),
+    PatternRule("aadhaar.plain", "AADHAAR", re.compile(r"(?<![0-9A-Za-z-])\d{12}(?![0-9A-Za-z-])")),
+    PatternRule("phone.in", "PHONE", re.compile(
+        r"(?<![0-9A-Za-z])(?:(?:\+|00)?91[\s.-]?|0)?[6-9](?:[\s.-]?\d){9}(?![0-9A-Za-z])")),
+    PatternRule("abha.plain", "ABHA_NUMBER", re.compile(_NB + r"\d{14}" + _NA)),
+    PatternRule("pan", "PAN", re.compile(_NB + r"[A-Z]{3}[ABCFGHLJPTK][A-Z]\d{4}[A-Z]" + _NA)),
+    PatternRule("pin.label", "PIN", re.compile(
+        r"(?i)(?:PIN(?:\s*Code)?|Pincode|Zip|पिन(?:\s*कोड)?)\s*(?:No\.?)?\s*[:\-]?\s*([1-8]\d{5})" + _NA), 1),
 )
+
+PHONE_RX = RULES[6].regex
+EMAIL_RX = RULES[0].regex
 
 # --------------------------------------------------------------------------- Verhoeff
 
@@ -57,3 +78,16 @@ def verhoeff_valid(digits: str) -> bool:
     for i, ch in enumerate(reversed(digits)):
         c = _D[c][_P[i % 8][int(ch)]]
     return c == 0
+
+
+def digits_only(s: str) -> str:
+    """ASCII digits of ``s`` (after Devanagari digit mapping)."""
+    return re.sub(r"\D", "", ascii_digits(s))
+
+
+def phone_key(s: str) -> str | None:
+    """Canonical 10-digit Indian mobile number, or ``None``."""
+    d = digits_only(s)
+    if len(d) >= 10 and d[-10] in "6789":
+        return d[-10:]
+    return None
