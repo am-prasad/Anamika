@@ -107,8 +107,7 @@ def json_role(key: str, path: list[str], resource: str | None, value: Any) -> st
     parents = [norm_key(p) for p in path]
     pctx = person_context(path, resource)
     parent = parents[-1] if parents else ""
-    if n in ("id", "fullurl", "reference", "resourcetype", "url", "system", "use", "status",
-             "lastupdated", "profile"):
+    if n in ("id", "fullurl", "reference", "resourcetype", "url", "system", "use", "status", "profile"):
         return C.KEEP
     if n == "value" and parent in ("identifier",) or (n == "value" and "identifier" in parents[-2:]):
         return C.KEEP if is_uuid(str(value)) else C.MRN
