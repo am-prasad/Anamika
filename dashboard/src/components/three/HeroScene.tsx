@@ -1,9 +1,9 @@
 "use client";
 
-import { Line } from "@react-three/drei";
+import { Line, PerformanceMonitor } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Bloom, EffectComposer } from "@react-three/postprocessing";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 
 import { buildFigure } from "./body";
@@ -157,6 +157,18 @@ function Helix() {
   );
 }
 
+/** True when WebGL runs on the CPU (SwiftShader, llvmpipe): no GPU, so render less. */
+function softwareGL(): boolean {
+  try {
+    const gl = document.createElement("canvas").getContext("webgl");
+    const ext = gl?.getExtension("WEBGL_debug_renderer_info");
+    const name = ext && gl ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : "";
+    return /swiftshader|llvmpipe|software/i.test(name);
+  } catch {
+    return false;
+  }
+}
+
 export default function HeroScene({
   identifiers,
   replayKey,
@@ -170,22 +182,28 @@ export default function HeroScene({
 }) {
   // identity share scales with what the pipeline actually found
   const identityShare = Math.min(0.32, Math.max(0.1, identifiers / 12000));
-  const count = 12000;
+  // software renderers (no GPU) start light; any machine that falls behind drops DPR and bloom
+  const [soft] = useState(() => softwareGL());
+  const [low, setLow] = useState(soft);
+  const count = soft ? 6000 : 12000;
   return (
     <Canvas
-      dpr={[1, 1.75]}
+      dpr={low ? 1 : [1, 1.75]}
       frameloop={active && !still ? "always" : "demand"}
       camera={{ position: [0, 1.05, 4.3], fov: 32 }}
       onCreated={({ camera }) => camera.lookAt(0, -0.05, 0)}
       gl={{ antialias: false, alpha: true, powerPreference: "high-performance" }}
       aria-hidden
     >
+      <PerformanceMonitor onDecline={() => setLow(true)} flipflops={1} />
       <fog attach="fog" args={["#050B14", 4.5, 10]} />
       <Figure count={count} identityShare={identityShare} replayKey={replayKey} still={still} />
       <Helix />
-      <EffectComposer multisampling={0}>
-        <Bloom luminanceThreshold={0.6} luminanceSmoothing={0.3} intensity={0.45} mipmapBlur />
-      </EffectComposer>
+      {!low && (
+        <EffectComposer multisampling={0}>
+          <Bloom luminanceThreshold={0.6} luminanceSmoothing={0.3} intensity={0.45} mipmapBlur />
+        </EffectComposer>
+      )}
     </Canvas>
   );
 }
