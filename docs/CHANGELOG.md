@@ -27,3 +27,11 @@
 - Strong-ID linkage with cannot-link constraints; pseudonyms written inside every linked record.
 - Hidden channels cleaned: JSON keys, CSV headers, export metadata, FHIR narrative, base64 attachments, file names.
 - Practice self-check: 0 / 3,230 PII visible, 0 / 4 canaries, 100% medical values, link F0.5 0.99 (0 false merges), LOS 20/20, 2.6 s, 31 MB. 185 tests.
+
+## S2 · Safe submission frozen (2026-11-26)
+
+- Fuzz generator with answer key: invented names (Latin + Devanagari), renamed headers / keys / labels, re-encodings, DOB formats, hostile files and three novel templates.
+- Generalisation fixes found by fuzzing: token-based header rules, value profiling for name and address columns, Devanagari tokens in file names, colon-tolerant context verbs.
+- Cross-script phonetic name keys; name + village + age, name + relative and unique-only fragment keys under cannot-link constraints.
+- Bench under 2 pinned CPUs and a 4 GB cap: 200 files 2.6 s / 43 MB; 1,245 files 20.4 s / 63 MB.
+- Practice: 0 leaks, link F0.5 1.00 (R 0.99), 0 false merges. Fuzz ×3: 0 leaks, F0.5 0.99, 0 false merges. 224 tests. Tagged `v1-safe` locally.

@@ -11,3 +11,6 @@ The official score is estimated only from the kit's stated starter level.
 | 2026-11-26 | S1 | column classifier, patterns, run-time lexicon, context engine | 4.7% (152) | 5.1 / 0 / 0% | 0/4 | 99.8% | 0.97 | n/a | n/a | OK | 3.3 s | n/a |
 | 2026-11-26 | S1 | safe-vocab fix, Hinglish particles, name expansion, eponym guard, file-name growth | 0.0% (0) | 0 / 0 / 0% | 0/4 | 100% (4,855) | 0.97 | 0.0% (0 / 3,230) | 0 | OK | 2.6 s / 31 MB | n/a |
 | 2026-11-26 | S1 | JSON doc records + call-line phones as evidence | 0.0% (0) | 0 / 0 / 0% | 0/4 | 100% | **0.99** (P 1.00 R 0.96) | 0.0% | 0 | OK + READY (no warnings) | 2.6 s / 31.3 MB | not estimated until S4 attacker |
+| 2026-11-26 | S2 | **fuzz 7/8/9 baseline** (unseen names, headers, labels, encodings) | 2.2% (70) | 2.0 / 7.6 / 0% | 0/4 | 100% | 0.63 (R 0.25) | 4.7% | 0 | OK | 2.6 s | — |
+| 2026-11-26 | S2 | token header rules, name/address profiling, deva file names | fuzz 0.0% | 0 / 0 / 0% | 0/4 | 100% | fuzz 0.99 (R 0.96) | fuzz 0.0% | 0 | OK | 2.6 s | — |
+| 2026-11-26 | S2 | cross-script keys, name+village+age, unique-only fragment keys | dev 0.0% · fuzz 0.0% | 0 / 0 / 0% | 0/4 | 100% | **dev 1.00 (R 0.99) · fuzz 0.99 (R 0.97)** | 0.0% | 0 | OK + READY | 2.6 s / 43 MB (bench); 1,245 files 20.4 s / 63 MB | — |

@@ -53,3 +53,23 @@ links nobody. Practice data: 0 false merges.
 The design does not depend on file names or exact headers: synonyms plus value profiling, and a lexicon
 learned at run time. It is not yet proven: S2 adds a fuzz generator with renamed headers, new schemas
 and encodings, and we will report those numbers.
+
+## Stage 2: Safe submission frozen
+
+**Q: How do you know it works on formats you have never seen?**
+We built a generator that replaces every name, renames headers, keys and labels, re-encodes files and
+adds new templates, with its own answer key. Before the S2 fixes it showed 0.25 link recall and a 2.2%
+leak rate. After them: 0 leaks and 0.97 recall on all three variants, plus 0 of 16 leaks on brand-new templates.
+
+**Q: How do you link a Hindi prescription to an English registration?**
+Both names fold to the same phonetic key (Devanagari → ITRANS → spelling-variance folding → consonant
+skeleton). A link also needs the same village key and an age within two years, and it never overrides
+a conflicting identifier.
+
+**Q: What if a short note matches two patients?**
+It keeps its own pseudonym. Fragment keys may only attach to the single cluster that already carries
+them; they can never bridge two people.
+
+**Q: Will it fit in 2 CPUs, 4 GB and 15 minutes?**
+Measured under `taskset` and a 4 GB `ulimit`: 2.6 s and 43 MB for the practice set, 20 s and 63 MB for a
+6× larger set (growth exponent ≈ 1.13).

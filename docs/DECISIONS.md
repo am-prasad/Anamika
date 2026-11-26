@@ -65,3 +65,12 @@
 ## ADR-014 · Cluster anchor breaks collisions by cluster root
 **Decision:** the anchor is the smallest key of the cluster; if two clusters kept apart by a conflict share it, the root record id is appended.
 **Why:** otherwise two people separated by a cannot-link constraint would receive the same pseudonym, which is a false merge in the output.
+
+## ADR-015 · Measure generalisation with a fuzz generator that has an answer key
+**Decision:** mutate the practice set (names, labels, encodings, templates) and rewrite its truth file consistently, then score with the organisers' `check_dev.py`.
+**Alternatives:** hand-written test files; trusting practice-set numbers.
+**Why:** the chaos round costs the reference about 30 points. A scored, repeatable unseen-format test turned a hidden 0.25 recall into a visible bug.
+
+## ADR-016 · Weak name evidence only with a second clue, and fragments only attach
+**Decision:** cross-script name keys link only together with a village (age ±2) or a relative. First-name + relative keys can only attach singleton records to one already-anchored cluster.
+**Why:** the scorer weighs precision twice as much as recall (F0.5). The homonym trap puts same-name people in the data on purpose.
