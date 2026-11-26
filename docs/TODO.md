@@ -16,8 +16,15 @@
 - [x] Fellegi–Sunter gate for weak pairs
 - [x] API: explain, graph, compare (demo), presets, utility / attack verification
 
-## S5 (frontend, awaiting go-ahead)
-- [ ] Ask the user for their frontend strategy before starting (Next.js)
+## S5 (console, done)
+- [x] Six-screen Next.js console on live runs, demo script, stage report
+
+## S6 (docs, brief & pitch)
+- [ ] Two-page brief PDF from the toolkit template
+- [ ] Architecture diagram for README, brief and pitch
+- [ ] Backup screen recording of the demo
+- [ ] QA_PREP to 30 questions
+- [ ] Measure hero FPS on a GPU machine
 
 ## Service layer (done in S4)
 - [x] Policy presets per job, explain / graph endpoints, attack / utility verification
