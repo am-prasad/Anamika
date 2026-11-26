@@ -272,3 +272,13 @@ anamika/
 ├── dashboard/             Next.js console (demo and review only; npm run demo)
 └── docs/                  design notes, ADRs, API, stage reports
 ```
+
+## Contributors
+
+| | Name | GitHub |
+|---|---|---|
+| <img src="https://github.com/ampere207.png?size=64" width="40" alt="" /> | Aashrith M P | [@ampere207](https://github.com/ampere207) |
+| <img src="https://github.com/rishinavroop22.png?size=64" width="40" alt="" /> | Rishi Navroop | [@rishinavroop22](https://github.com/rishinavroop22) |
+| <img src="https://github.com/am-prasad.png?size=64" width="40" alt="" /> | Prasad A M | [@am-prasad](https://github.com/am-prasad) |
+
+Built for Yugaantar DevForge, Track 3 "Secret Wards".
