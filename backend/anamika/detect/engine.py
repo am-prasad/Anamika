@@ -44,9 +44,9 @@ class Span:
 
 
 NAME_TYPES = {"PATIENT_NAME", "RELATIVE_NAME", "PERSON_NAME"}
-PLACE_TYPES = {"ADDRESS", "VILLAGE"}
+PLACE_TYPES = {"ADDRESS", "VILLAGE", "TEHSIL"}
 _PRIORITY = {"EMAIL": 9, "ABHA_ADDRESS": 9, "ABHA_NUMBER": 9, "AADHAAR": 9, "AADHAAR_MASKED": 9,
-             "PHONE": 8, "PAN": 8, "VOTER_ID": 8, "MRN": 7, "INSURANCE_ID": 7, "PATIENT_NAME": 6,
+             "PHONE": 8, "PAN": 8, "VOTER_ID": 8, "TEHSIL": 3, "MRN": 7, "INSURANCE_ID": 7, "PATIENT_NAME": 6,
              "RELATIVE_NAME": 5, "PERSON_NAME": 4, "ADDRESS": 3, "VILLAGE": 3, "PIN": 2}
 
 # --------------------------------------------------------------------------- name scanning
@@ -128,6 +128,8 @@ INS_LABEL_RX = _rx(rf"(?<![A-Za-z])(?:{L.INSURANCE_LABELS})\s*[:\-.#]?\s*([A-Za-
 ADDRESS_LABEL_RX = _rx(rf"(?<![\w{DEVA}])(?:{L.ADDRESS_LABELS})(?:\s*\([^)\n]{{0,20}}\))?\s*[:\-]\s*",
                        re.IGNORECASE)
 VILLAGE_LABEL_RX = _rx(rf"(?<![\w{DEVA}])(?:{L.VILLAGE_LABELS})\s*[:\-.]?\s+", re.IGNORECASE)
+DISTRICT_RX = _rx(rf"(?<![\w{DEVA}])(?:{L.DISTRICT_MARKERS})\s*\.?\s*[:\-]?\s*", re.IGNORECASE)
+TEHSIL_RX = _rx(rf"(?<![\w{DEVA}])(?:{L.TEHSIL_MARKERS})\s*\.?\s*[:\-]?\s*", re.IGNORECASE)
 ADMIN_RX = _rx(rf"(?<![\w{DEVA}])(?:{L.ADMIN_PLACE_MARKERS})\s*\.?\s*[:\-]?\s*", re.IGNORECASE)
 DOCTOR_RX = _rx(rf"(?<![A-Za-z])(?:Dr|DR|Doctor)\.?\s+|(?<![{DEVA}])(?:डॉ\.?|डॉक्टर)\s*")
 FACILITY_RX = _rx(rf"(?:(?:[A-Z][A-Za-z.&'’-]*|[{DEVA}]+)\s+){{0,4}}{L.FACILITY_WORDS}(?![A-Za-z])")
@@ -169,6 +171,10 @@ class Detector:
             for m in rx.finditer(text):
                 out.append((m.start(), m.end()))
         for m in ADMIN_RX.finditer(text):
+            if not self.lex.keep_tehsil and TEHSIL_RX.match(text, m.start()):
+                continue
+            if not self.lex.keep_district and DISTRICT_RX.match(text, m.start()):
+                continue
             s = scan_name(text, m.end(), 3)
             if s:
                 out.append((m.start(), s[1]))
@@ -257,14 +263,26 @@ class Detector:
                 spans.append(Span(m.start(1), m.end(1), "INSURANCE_ID", "label.insurance"))
         for m in ADDRESS_LABEL_RX.finditer(text):
             eol = text.find("\n", m.end())
-            spans.extend(address_spans(text, m.end(), len(text) if eol < 0 else eol))
+            spans.extend(address_spans(text, m.end(), len(text) if eol < 0 else eol, self.lex.keep_tehsil,
+                                       self.lex.keep_district))
         for m in RESIDENT_RX.finditer(text):
             s2 = scan_name(text, m.end(), 3)
             if s2:
                 spans.append(Span(s2[0], s2[1], "VILLAGE", "label.resident"))
         for rx in (LABEL_VALUE_RX, TAG_VALUE_RX):
             for m in rx.finditer(text):
-                spans.extend(role_spans(text, m.group(1), m.start(2), m.end(2)))
+                spans.extend(role_spans(text, m.group(1), m.start(2), m.end(2), self.lex.keep_tehsil,
+                                        self.lex.keep_district))
+        if not self.lex.keep_district:
+            for m in DISTRICT_RX.finditer(text):
+                s2 = scan_name(text, m.end(), 3)
+                if s2:
+                    spans.append(Span(m.start(), s2[1], "TEHSIL", "label.district"))
+        if not self.lex.keep_tehsil:
+            for m in TEHSIL_RX.finditer(text):
+                s2 = scan_name(text, m.end(), 3)
+                if s2:
+                    spans.append(Span(m.start(), s2[1], "TEHSIL", "label.tehsil"))
         for m in VILLAGE_LABEL_RX.finditer(text):
             s = scan_name(text, m.end(), 3)
             if s:
@@ -307,6 +325,9 @@ class Detector:
             for m in _DEVA_WORD.finditer(text):
                 if m.group(0) in lex.deva_set:
                     spans.append(Span(m.start(), m.end(), "PERSON_NAME", "lex.name.deva"))
+        if not lex.keep_tehsil and lex.tehsil_rx is not None:
+            for m in lex.tehsil_rx.finditer(text):
+                spans.append(Span(m.start(), m.end(), "TEHSIL", "lex.tehsil"))
         if lex.place_first:
             low_text = text.casefold()
             for m in _ANY_WORD.finditer(low_text):
@@ -384,7 +405,8 @@ _ROLE_ETYPE = {"patient_name": "PATIENT_NAME", "first_name": "PATIENT_NAME", "la
                "pin": "PIN"}
 
 
-def role_spans(text: str, label: str, start: int, end: int) -> list[Span]:
+def role_spans(text: str, label: str, start: int, end: int, keep_tehsil: bool = True,
+               keep_district: bool = True) -> list[Span]:
     """Spans for a labelled value whose label the field classifier recognises (any language)."""
     from .columns import ADDRESS, classify_label
 
@@ -392,7 +414,7 @@ def role_spans(text: str, label: str, start: int, end: int) -> list[Span]:
     if role is None:
         return []
     if role == ADDRESS:
-        return address_spans(text, start, end)
+        return address_spans(text, start, end, keep_tehsil, keep_district)
     etype = _ROLE_ETYPE.get(role)
     if etype is None:
         return []
@@ -408,7 +430,8 @@ def role_spans(text: str, label: str, start: int, end: int) -> list[Span]:
     return [Span(start, end, etype, "label.field")]
 
 
-def address_spans(text: str, start: int, end: int) -> list[Span]:
+def address_spans(text: str, start: int, end: int, keep_tehsil: bool = True,
+                  keep_district: bool = True) -> list[Span]:
     """Spans for an address value: every comma segment except Tehsil / District clauses.
 
     A trailing ``- 229073`` PIN becomes a PIN span (generalised, not deleted).
@@ -423,7 +446,9 @@ def address_spans(text: str, start: int, end: int) -> list[Span]:
     for m in re.finditer(r",|$", text[start:limit]):
         seg_end = start + m.start()
         seg = text[seg_start:seg_end]
-        if seg.strip() and not ADMIN_RX.match(seg.strip()) and not re.fullmatch(r"\s*(?:India|UP|U\.P\.)\s*", seg):
+        admin = ADMIN_RX.match(seg.strip()) and (keep_tehsil or not TEHSIL_RX.match(seg.strip())) \
+            and (keep_district or not DISTRICT_RX.match(seg.strip()))
+        if seg.strip() and not admin and not re.fullmatch(r"\s*(?:India|UP|U\.P\.)\s*", seg):
             lead = len(seg) - len(seg.lstrip())
             trail = len(seg.rstrip())
             spans.append(Span(seg_start + lead, seg_start + trail, "ADDRESS", "label.address"))

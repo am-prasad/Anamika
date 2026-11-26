@@ -41,6 +41,7 @@ class Record:
     patient: str | None
     out: str | None = None
     status: str | None = None
+    rid_key: str = field(default="", repr=False, compare=False)
 
     def as_dict(self) -> dict[str, Any]:
         d: dict[str, Any] = {"file": self.file, "loc": self.loc, "patient": self.patient}
