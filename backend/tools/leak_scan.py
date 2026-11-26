@@ -51,8 +51,11 @@ DEFAULT_KIT = Path(os.environ.get("ANAMIKA_TOOLKIT",
 GENERIC_TOKENS = {
     "devi", "kumar", "kumari", "kr", "md", "mohd", "ji", "sahab", "saab", "sahib", "smt",
     "shri", "sri", "shree", "mr", "mrs", "ms", "miss", "km", "baby", "master", "didi",
-    "bhai", "bhaiya", "behen", "behenji", "bibi", "begum", "bai", "ben", "the",
-    "देवी", "कुमार", "कुमारी", "जी", "साहब", "श्री", "श्रीमती", "मो",
+    "bhai", "bhaiya", "behen", "behenji", "bibi", "begum", "bai", "ben", "the", "jee", "sahib",
+    "aunty", "auntie", "uncle", "amma", "babu", "chacha", "chachi", "dada", "dadi", "nana", "nani",
+    "mausi", "bua", "beta",
+    "देवी", "कुमार", "कुमारी", "जी", "साहब", "श्री", "श्रीमती", "मो", "दीदी", "भैया", "भाई",
+    "अम्मा", "बाबू", "चाचा", "चाची", "दादा", "दादी",
 }
 _ZW = dict.fromkeys(map(ord, "​‌‍⁠﻿­"), None)
 _INDIC_DIGITS = {ord(c): str(i) for i, c in enumerate("०१२३४५६७८९")}
