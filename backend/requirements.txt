@@ -1,0 +1,86 @@
+# Pipeline-only runtime deps for the evaluator (raksha.toml setup). GENERATED from uv.lock:
+#   cd backend && uv export --frozen --no-dev --no-emit-project --no-hashes -o requirements.txt
+annotated-doc==0.0.6 ; python_full_version < '3.11'
+    # via typer
+annotated-doc==0.0.7 ; python_full_version >= '3.11'
+    # via typer
+annotated-types==0.8.0
+    # via pydantic
+backports-functools-lru-cache==2.0.0
+    # via indic-transliteration
+cffi==2.1.1 ; platform_python_implementation != 'PyPy'
+    # via cryptography
+charset-normalizer==3.5.3
+    # via anamika
+colorama==0.4.6 ; sys_platform == 'win32'
+    # via
+    #   tqdm
+    #   typer
+cryptography==50.0.2
+    # via anamika
+indic-transliteration==2.3.83
+    # via anamika
+jellyfish==1.2.1 ; python_full_version < '3.11'
+    # via anamika
+jellyfish==1.3.0 ; python_full_version >= '3.11'
+    # via anamika
+markdown-it-py==4.3.0
+    # via rich
+mdurl==0.1.2
+    # via markdown-it-py
+psutil==7.2.2
+    # via anamika
+pycparser==3.11 ; python_full_version < '3.11' and implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
+    # via cffi
+pycparser==3.12 ; python_full_version >= '3.11' and implementation_name != 'PyPy' and platform_python_implementation != 'PyPy'
+    # via cffi
+pydantic==2.14.4
+    # via typer
+pydantic-core==2.50.5
+    # via pydantic
+pygments==2.21.0
+    # via rich
+python-dateutil==3.0.0 ; python_full_version < '3.11'
+    # via anamika
+python-dateutil==4.0.0 ; python_full_version >= '3.11'
+    # via anamika
+pyyaml==6.0.4
+    # via anamika
+rapidfuzz==3.14.5 ; python_full_version < '3.11'
+    # via anamika
+rapidfuzz==3.14.6 ; python_full_version >= '3.11'
+    # via anamika
+regex==2026.9.29 ; python_full_version < '3.11'
+    # via
+    #   anamika
+    #   indic-transliteration
+regex==2026.11.25 ; python_full_version >= '3.11'
+    # via
+    #   anamika
+    #   indic-transliteration
+rich==15.0.0
+    # via typer
+roman==5.2
+    # via indic-transliteration
+shellingham==1.5.4
+    # via typer
+six==1.17.0 ; python_full_version < '3.11'
+    # via python-dateutil
+toml==0.10.2
+    # via indic-transliteration
+tqdm==4.70.1
+    # via indic-transliteration
+typer==0.29.1 ; python_full_version < '3.11'
+    # via indic-transliteration
+typer==0.29.3 ; python_full_version >= '3.11'
+    # via indic-transliteration
+typing-extensions==4.16.0
+    # via
+    #   cryptography
+    #   pydantic
+    #   pydantic-core
+    #   typing-inspection
+typing-inspection==0.4.5
+    # via pydantic
+tzdata==2026.6
+    # via python-dateutil

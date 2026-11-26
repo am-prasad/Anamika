@@ -46,7 +46,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 
 DEFAULT_KIT = Path(os.environ.get("ANAMIKA_TOOLKIT",
-                                  Path(__file__).resolve().parents[2] / "Secret-Wards-ToolKit"))
+                                  Path(__file__).resolve().parents[3] / "Secret-Wards-ToolKit"))
 
 GENERIC_TOKENS = {
     "devi", "kumar", "kumari", "kr", "md", "mohd", "ji", "sahab", "saab", "sahib", "smt",
@@ -195,10 +195,14 @@ def sha12(s: str) -> str:
     return hashlib.sha256(s.encode()).hexdigest()[:12]
 
 
-def scan(out_dir: Path, kit: Path, truth_path: Path, extras: list[Path]) -> dict:
-    """Scan ``out_dir`` (+ ``extras``) against the answer key; return a summary dict."""
+def scan(out_dir: Path, input_dir: Path, truth_path: Path, extras: list[Path]) -> dict:
+    """Scan ``out_dir`` (+ ``extras``) against the answer key; return a summary dict.
+
+    ``input_dir`` is the raw input the release was produced from (needed for the
+    scorer's "allowed occurrences" rule); ``truth_path`` is the matching answer key.
+    """
     truth = json.loads(truth_path.read_text(encoding="utf-8"))
-    inp = kit / "dev" / "input"
+    inp = input_dir
     san = out_dir / "sanitized"
     try:
         report = json.loads((out_dir / "report.json").read_text(encoding="utf-8"))
@@ -301,12 +305,13 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Anamika leak scanner (never prints values)")
     ap.add_argument("--output", required=True, help="pipeline output folder")
     ap.add_argument("--kit", default=str(DEFAULT_KIT), help="organiser toolkit folder")
+    ap.add_argument("--input", default=None, help="raw input dir (default: <kit>/dev/input)")
     ap.add_argument("--truth", default=None, help="truth.json (default: <kit>/dev/truth/truth.json)")
     ap.add_argument("--extra", nargs="*", default=[], help="more dirs/files: logs, TMPDIR, stdout capture")
     ap.add_argument("--json", action="store_true", help="print the summary as JSON")
     a = ap.parse_args()
     kit = Path(a.kit)
-    res = scan(Path(a.output), kit, Path(a.truth or kit / "dev" / "truth" / "truth.json"),
+    res = scan(Path(a.output), Path(a.input or kit / "dev" / "input"), Path(a.truth or kit / "dev" / "truth" / "truth.json"),
                [Path(x) for x in a.extra])
     if a.json:
         print(json.dumps(res, indent=2))

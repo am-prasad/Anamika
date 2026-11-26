@@ -1,0 +1,49 @@
+[project]
+name = "anamika"
+version = "0.1.0"
+description = "Anamika: offline, LLM-free privacy firewall for multilingual hospital records, with a FastAPI service layer"
+readme = "../README.md"
+requires-python = ">=3.10"
+# Core = the scored offline pipeline only. Exact versions live in uv.lock and the
+# exported requirements.txt the evaluator installs. Keep this list small.
+dependencies = [
+    "cryptography>=44",
+    "regex>=2024.11.6",
+    "charset-normalizer>=3.4",
+    "rapidfuzz>=3.10",
+    "jellyfish>=1.1",
+    "indic-transliteration>=2.3.69",
+    "python-dateutil>=2.9",
+    "pyyaml>=6.0.2",
+    "psutil>=6.1",
+]
+
+[project.optional-dependencies]
+# The FastAPI service (job API, worker). Never needed by the offline pipeline run.
+api = [
+    "fastapi>=0.120",
+    "uvicorn[standard]>=0.38",
+    "pydantic-settings>=2.11",
+    "python-multipart>=0.0.20",
+    "redis>=5.2,<6",
+    "arq>=0.26",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4",
+    "httpx>=0.28",
+]
+docs = [
+    "reportlab>=4.4",
+    "markdown-it-py>=4.0",
+]
+
+[tool.uv]
+default-groups = ["dev"]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]

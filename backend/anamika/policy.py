@@ -1,4 +1,4 @@
-"""Policy loader: reads ``config/policy.yaml`` into a typed, read-only view.
+"""Policy loader: reads ``config/policy.yaml`` (repo root) into a typed, read-only view.
 
 All privacy knobs (shift ranges, band widths, k, generalisation targets) come from the
 policy file. ``ANAMIKA_POLICY`` may point to an alternative file (used by the demo
@@ -13,7 +13,9 @@ from typing import Any, Mapping
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = BACKEND_ROOT.parent
+# config/ lives at the repository root (shared by the evaluator, the CLI and the API).
 DEFAULT_POLICY = REPO_ROOT / "config" / "policy.yaml"
 
 
