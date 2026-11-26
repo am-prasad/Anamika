@@ -1,0 +1,42 @@
+# Anamika privacy policy: every privacy / utility knob lives here.
+# The pipeline never hardcodes these values; change them here and re-run.
+
+version: 1
+
+dates:
+  # One secret, per-patient offset (HMAC of the pseudonym) applied to EVERY date of that
+  # patient, so intervals and length of stay are preserved exactly.
+  shift_min_days: 30          # |offset| is never smaller than this
+  shift_max_days: 365         # |offset| is never larger than this
+  shift_multiple_of_7: false  # true keeps weekday; false hides it (we prefer hiding)
+  unlinked_scope: record      # records without a pseudonym get a per-record offset
+
+ages:
+  band_years: 5               # 45-49; the band always contains the true age
+  top_code: 90                # ages >= 90 collapse to "90+"
+  dob_policy: shift           # shift (same per-patient offset) | year | band | remove
+
+location:
+  keep: [district, tehsil, state]   # generalisation target for village / mohalla
+  remove: [house, street, locality, landmark, village]
+  pin_digits: 3               # 6 = keep, 3 = keep true prefix, 0 = remove
+
+kanon:
+  k: 5                        # minimum equivalence-class size on the QI tuple
+  quasi_identifiers: [age_band, gender, district, diagnosis_category]
+  escalation: [widen_age_band, location_to_district, suppress_rare_diagnosis]
+  never_touch: [length_of_stay, dose, frequency, lab_value, vital]
+
+linkage:
+  link_threshold: 12.0        # Fellegi-Sunter log-likelihood needed for a fuzzy link
+  require_second_clue: true   # same name alone never links
+  max_cluster_size: 64        # sanity guard against runaway merges
+
+ingest:
+  max_json_depth: 200         # deeper JSON is quarantined (json_too_deep)
+  max_file_mb: 512
+  supported_extensions: [".csv", ".tsv", ".json", ".txt"]
+
+output:
+  placeholder_style: typed    # [PHONE], [AADHAAR], ... ; patient names -> pseudonym
+  pseudonym_prefix: "PSN-"
