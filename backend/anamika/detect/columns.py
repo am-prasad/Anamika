@@ -40,7 +40,8 @@ NAME_ROLES = {PATIENT_NAME, FIRST_NAME, LAST_NAME, LOCAL_NAME, RELATIVE_NAME, GU
 # Ordered: first match wins. Each entry: (role, exact-normalised names, substrings).
 _SYNONYMS: list[tuple[str, set[str], tuple[str, ...]]] = [
     (DOB, {"dob", "dateofbirth", "birthdate", "janmtithi", "जन्मतिथि", "birthday", "dobmmddyyyy",
-           "dobddmmyyyy"}, ("dateofbirth", "birthdate", "janmtithi", "जन्म")),
+           "dobddmmyyyy", "birthdt", "dtofbirth"}, ("dateofbirth", "birthdate", "janmtithi", "janam", "janm",
+                                                  "birth", "जन्म")),
     (AGE_SEX, {"agesex", "agegender", "ageandsex"}, ()),
     (ABHA_ADDRESS, {"abhaaddress", "healthidaddress", "phraddress"}, ()),
     (ABHA, {"abha", "abhano", "abhanumber", "abhaid", "healthid", "healthidno", "ndhmid"}, ("abha",)),
@@ -59,7 +60,7 @@ _SYNONYMS: list[tuple[str, set[str], tuple[str, ...]]] = [
                      "nextofkin", "attendant", "attendantname", "careof", "co", "spouse",
                      "पिताकानाम", "पतिकानाम", "पितापतिकानाम", "relative", "kin", "informant"},
      ("relativename", "guardianname", "fathername", "husbandname", "pitapati", "attendant",
-      "पिता", "पति")),
+      "abhibhavak", "sambandhi", "पिता", "पति", "अभिभावक")),
     (GUARDIAN, {"guardian", "fatherhusband"}, ()),
     (RELATION, {"relation", "relationship", "rel", "relationtype", "sambandh", "संबंध"}, ()),
     (FIRST_NAME, {"firstname", "fname", "givenname", "given", "first"}, ("firstname",)),
@@ -71,7 +72,8 @@ _SYNONYMS: list[tuple[str, set[str], tuple[str, ...]]] = [
     (FACILITY, {"facility", "hospital", "hospitalname", "lab", "labname", "clinic", "centre"}, ()),
     (PATIENT_NAME, {"name", "patientname", "ptname", "naam", "patient", "patientsname", "fullname",
                     "नाम", "मरीज़कानाम", "मरीजकानाम", "रोगीकानाम", "beneficiaryname", "insuredname",
-                    "claimantname"}, ("patientname", "ptname", "मरीज़", "रोगी")),
+                    "claimantname", "pname", "mareez", "mariz", "marij", "rogi", "rogikanaam", "mareezkanaam",
+                    "nameofpatient"}, ("patientname", "ptname", "mareez", "rogi", "मरीज़", "रोगी")),
     (PHONE, {"mobile", "mob", "mobileno", "mobilenumber", "phone", "phoneno", "contact", "contactno",
              "tel", "telephone", "callback", "whatsapp", "मोबाइल", "फोन", "cell"},
      ("mobile", "phone", "contactno", "callback", "मोबाइल")),
@@ -80,15 +82,22 @@ _SYNONYMS: list[tuple[str, set[str], tuple[str, ...]]] = [
     (HOUSE, {"house", "houseno", "hno", "housenumber", "makan", "मकान"}, ()),
     (LOCALITY, {"locality", "mohalla", "colony", "street", "landmark", "moholla", "basti"}, ()),
     (VILLAGE, {"village", "villagemohalla", "gaon", "gram", "ग्राम", "गांव", "गाँव", "city", "town",
-               "villagetown", "vill"}, ("village", "gaon")),
+               "villagetown", "vill", "grammohalla", "mauza", "basti"}, ("village", "gaon", "gram", "mohalla", "ग्राम")),
     (TEHSIL, {"tehsil", "taluka", "taluk", "block", "तहसील", "subdistrict", "tehsilname"}, ("tehsil",)),
     (DISTRICT, {"district", "jila", "zila", "distt", "dist", "जिला", "ज़िला", "districtname"}, ("district",)),
     (STATE, {"state", "pradesh", "राज्य", "country"}, ()),
     (ADDRESS, {"address", "addr", "pata", "पता", "street", "line", "addressline", "residence",
-               "permanentaddress", "fulladdress"}, ("address", "पता")),
-    (AGE, {"age", "umar", "उम्र", "आयु", "ageyears", "ageyrs", "ageinyears"}, ()),
+               "permanentaddress", "fulladdress", "niwas", "nivas", "residentialaddress"},
+     ("address", "niwas", "पता")),
+    (AGE, {"age", "umar", "उम्र", "आयु", "ageyears", "ageyrs", "ageinyears", "aayu", "ayu", "umr"}, ()),
     (GENDER, {"gender", "sex", "ling", "लिंग"}, ()),
 ]
+
+_ID_OWNER = {"pt", "patient", "pat", "hosp", "hospital", "reg", "regn", "registration", "uhid", "mrn",
+             "cr", "ip", "ipd", "op", "opd", "case", "card", "admission", "adm", "inpatient", "record"}
+_ID_SUFFIX = {"id", "no", "num", "number", "nbr", "code", "ref", "reference", "uhid", "mrn"}
+_PHONE_TOKENS = {"mob", "mobile", "phone", "ph", "contact", "tel", "telephone", "cell", "whatsapp",
+                 "callback", "call", "phn"}
 
 _DATE_HINTS = ("date", "dated", "time", "tithi", "तारीख", "collected", "reported", "registered",
                "visit", "admission", "discharge", "admitted", "discharged", "dt", "doa", "dod",
@@ -117,6 +126,11 @@ def classify_label(label: str) -> str | None:
             return role
     raw = (label or "").casefold()
     tokens = re.split(r"[^a-zऀ-ॿ]+", raw)
+    toks = set(tokens)
+    if toks & _ID_OWNER and toks & _ID_SUFFIX:
+        return MRN
+    if toks & _PHONE_TOKENS:
+        return PHONE
     if any(t in _DATE_HINTS for t in tokens) or n.endswith(("date", "dt", "on", "at")):
         return DATE
     return None
@@ -170,6 +184,36 @@ def profile_values(values: Sequence[str]) -> str | None:
 def looks_like_id(value: str) -> bool:
     """Hospital-identifier shape: letters + digits with separators (``SNJ/26/064127``)."""
     return bool(_ID.match(value.strip()))
+
+
+_NAME_SHAPE = re.compile(r"^(?:(?:S|D|W|C)/O\s+)?(?:[A-Z][a-z'’]+\.?|[A-Z]\.|[\u0900-\u097F]+)"
+                         r"(?:\s+(?:[A-Z][a-z'’]+|[A-Z]\.|[\u0900-\u097F]+)){0,3}$")
+_ADDR_HINT = re.compile(r"(?i)\b(?:H\.?\s?No|House|Makan|Ward|Mohalla|Gali|Lane|Road|Near|Opp|Colony|Nagar|"
+                        r"Tehsil|Distt|Village|Vill)\b|मकान|गली|मोहल्ला|के पास|तहसील|जिला")
+
+
+def profile_people_places(values: Sequence[str], is_common: "callable[[str], bool]") -> str | None:  # type: ignore[valid-type]
+    """Second-stage profiling that needs dataset vocabulary: person-name or address columns.
+
+    A column is a *name* column when ≥ 80% of values are 1–4 capitalised / Devanagari tokens,
+    values are diverse, and the Latin tokens are not ordinary vocabulary of this dataset.
+    """
+    vals = [v.strip() for v in values if v and v.strip()]
+    if len(vals) < 3:
+        return None
+    n = len(vals)
+    distinct = len(set(vals)) / n
+    if sum(1 for v in vals if "," in v and _ADDR_HINT.search(v)) / n >= 0.6:
+        return ADDRESS
+    shaped = [v for v in vals if _NAME_SHAPE.match(v)]
+    if len(shaped) / n < 0.8 or distinct < 0.3:
+        return None
+    lat = [t for v in shaped for t in re.findall(r"[A-Za-z]{3,}", v) if t.upper() not in ("S", "D", "W", "C")]
+    if lat and sum(1 for t in lat if is_common(t)) / len(lat) > 0.2:
+        return None
+    if any(re.match(r"^(?:S|D|W|C)/O\s", v) for v in shaped):
+        return RELATIVE_NAME
+    return PERSON_NAME
 
 
 def classify_column(header: str, values: Iterable[str]) -> str:

@@ -44,7 +44,7 @@ RELATIVE_LABELS = (r"(?:Attendant|Guardian|Father(?:'s)?\s+Name|Husband(?:'s)?\s
                    r"Next\s+of\s+Kin|NOK|Relative|Informant|Spouse|Father/Husband|"
                    r"पिता\s+का\s+नाम|पति\s+का\s+नाम|माता\s+का\s+नाम|परिजन|अटेंडेंट)")
 #: free-text phrases that introduce a person ("called by X")
-PERSON_VERBS = r"(?:called|witnessed|accompanied|brought|raised|signed|informed|attended|escorted|visited)\s+by"
+PERSON_VERBS = r"(?:called|witnessed|accompanied|brought|raised|signed|informed|attended|escorted|visited)\s+by\s*:?"
 #: labels whose value is a hospital identifier
 ID_LABELS = (r"(?:UHID|MRN|MR\s*No|CR\s*No|Reg(?:istration)?\.?\s*No|Regn\.?\s*No|Patient\s*ID|IPD?\s*No|"
              r"IP\s*No|Adm(?:ission)?\.?\s*No|OPD\s*No|Hospital\s*(?:ID|No)|Case\s*No|"
