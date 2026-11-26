@@ -19,7 +19,10 @@ import hashlib
 import hmac
 import json
 import os
-import resource
+try:  # POSIX only; on native Windows (development) jobs run without rlimits
+    import resource
+except ImportError:  # pragma: no cover - Windows
+    resource = None  # type: ignore[assignment]
 import subprocess
 import time
 from pathlib import Path
@@ -45,6 +48,8 @@ def derive_release_secret(master: str, owner: str, release: str) -> str:
 
 
 def _limits(settings: Settings):  # type: ignore[no-untyped-def]
+    if resource is None:
+        return None
     mem = settings.job_memory_mb * 1024 * 1024
     cpu_s = settings.job_timeout_s * max(settings.job_cpus, 1) + 30
     cpus = settings.job_cpus

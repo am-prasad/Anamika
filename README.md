@@ -22,28 +22,85 @@ generalised so that a voter-list attacker cannot single anyone out.
 
 ## Quickstart
 
-**Offline CLI** (exactly what the evaluator runs; pipeline-only dependencies):
+Requirements: Python 3.10+, and for the service stack Docker (Docker Desktop on Windows).
+`uv` is optional and is used for development.
+
+### 1. Offline CLI (exactly what the evaluator runs)
+
+**Linux / macOS**
 
 ```bash
+python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 RAKSHA_SECRET=practice python backend/main.py --input path/to/dev/input --output out
 python3 path/to/validate_output.py --input path/to/dev/input --output out   # CONTRACT OK
 ```
 
-**Development with uv** (pipeline + API + tests):
+**Windows (PowerShell)**
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+$env:RAKSHA_SECRET = "practice"
+python backend\main.py --input path\to\dev\input --output out
+python path\to\validate_output.py --input path\to\dev\input --output out   # CONTRACT OK
+```
+
+In Command Prompt (cmd), activate with `.venv\Scripts\activate.bat` and set the secret with
+`set RAKSHA_SECRET=practice`. If PowerShell blocks the activation script, run
+`Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
+
+Optional flags: `--debug-spans DIR` writes value-free explanations (outside `--output`), and the
+`ANAMIKA_POLICY` environment variable selects a preset, e.g. `config/presets/research.yaml`.
+
+### 2. Development with uv (pipeline + API + tests)
+
+**Linux / macOS**
 
 ```bash
 cd backend && uv sync --extra api --group docs
-uv run pytest                                   # 77 tests
+uv run pytest                                   # 269 tests
 ANAMIKA_AUTH_DISABLED=true ANAMIKA_MASTER_SECRET=dev uv run uvicorn app.main:app --reload
 ```
 
-**Service stack with Docker** (FastAPI API + arq workers + Redis):
+**Windows (PowerShell)**
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"   # install uv once
+cd backend
+uv sync --extra api --group docs
+uv run pytest
+$env:ANAMIKA_AUTH_DISABLED = "true"; $env:ANAMIKA_MASTER_SECRET = "dev"
+uv run uvicorn app.main:app --reload
+```
+
+The API docs are at http://127.0.0.1:8000/docs. On native Windows, jobs run without the Linux
+resource limits (memory / CPU caps); use Docker for the enforced sandbox.
+
+### 3. Service stack with Docker (FastAPI API + arq workers + Redis)
+
+**Linux / macOS**
 
 ```bash
 cp .env.example .env            # set master secret, API-key hashes, Redis password
 docker compose up -d --build
 docker compose up -d --scale worker=3
+```
+
+**Windows (PowerShell, Docker Desktop)**
+
+```powershell
+Copy-Item .env.example .env     # set master secret, API-key hashes, Redis password
+docker compose up -d --build
+docker compose up -d --scale worker=3
+```
+
+Generate the values for `.env` (works on every OS):
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(48))"                       # master secret / Redis password
+python -c "import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest())" YOUR_API_KEY
 ```
 
 API reference, security controls and scaling model: [docs/API.md](docs/API.md).
@@ -157,14 +214,6 @@ listed here with its parameter count, and shipped in `models/`.
 | `--debug-spans DIR` | value-free span / role / rule explanations per file, outside the release |
 | `backend/tools/md2pdf.py` | renders stage overviews and the brief to PDF (uv group `docs`) |
 | `uv run pytest` | 269 tests: pipeline units on synthetic strings + API security and job lifecycle |
-
-## Limitations (honest, S4)
-
-- Fuzz variants and our 13 novel templates are ours; the organisers' sealed chaos catalogue can still surprise.
-- Phonetic name keys can collide for short names; they are used only with a second clue and under cannot-link constraints.
-- Privacy is measured with our implementation of the published attacker; the organisers' code is sealed. The targeted attack still succeeds against about a quarter of known-fact targets, mostly through visit-date coincidences.
-- The balanced default trades district and DOB detail for privacy; use the `research` preset where that trade is wrong.
-- Unsupported formats (PDF, images, XML) and invalid-UTF-8 notes are quarantined rather than parsed, by design.
 
 ## Repository map
 
