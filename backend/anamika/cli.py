@@ -1,10 +1,11 @@
 """Top-level runner: argument parsing, the guarded two-pass pipeline and exit codes.
 
-Pass A reads, hashes, decodes and parses every input (collecting identity evidence in
-later stages). Pass B rewrites each parsed file and writes it under ``sanitized/``.
-Any failure in either pass quarantines that file with a closed-vocabulary reason; no
-partial output is ever written. Exit code 0 is returned only when every input file is
-accounted for in ``report.json``.
+Pass A reads, hashes, decodes and parses every input, then the :class:`Pipeline` learns
+the dataset (lexicon, evidence, linkage). Pass B rewrites each parsed file and writes it
+under ``sanitized/`` (renamed when the file name holds PII). Any failure in either pass
+quarantines that file with a closed-vocabulary reason; no partial output is ever
+written. Exit code 0 is returned only when every input file is accounted for in
+``report.json``.
 
 Exit codes: 0 complete release · 1 accounting failure or fatal error · 2 bad invocation
 or missing secret.
@@ -15,29 +16,20 @@ import argparse
 import hashlib
 import os
 import time
-from collections import Counter
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping
 
 from . import policy as pol
-from .ingest.csv_io import read_table, write_table
-from .ingest.json_io import dump_json, load_json, record_pointers
+from .ingest.csv_io import read_table
+from .ingest.json_io import load_json, record_pointers
 from .ingest.sniff import QuarantineError, decode_bytes, detect_format
+from .pipeline import Item, Pipeline, rid
+from .privacy.dates import infer_order
 from .report import FileEntry, Record, RunReport, peak_rss_mb
-from .rewrite.text_out import clean_text, clean_value
 from .safety import LOG, Keyring, SecretMissing, install_guards, set_stage, sha_prefix
 
-
-@dataclass
-class Parsed:
-    """A fully parsed input file, ready for rewriting."""
-
-    rel: str
-    sha: str
-    fmt: str  # csv | tsv | json | text
-    payload: Any
-    locs: list[str] = field(default_factory=list)
+#: formats whose legacy exports may legitimately be cp1252; free-text notes must be UTF-8
+_LEGACY_OK = {"csv", "tsv"}
 
 
 def walk_inputs(root: Path) -> list[Path]:
@@ -52,31 +44,37 @@ def walk_inputs(root: Path) -> list[Path]:
     return found
 
 
-def parse_file(rel: str, raw: bytes, sha: str, policy: Mapping[str, Any]) -> Parsed:
-    """Pass A for one file: decode and parse, or raise :class:`QuarantineError`."""
+def parse_file(rel: str, raw: bytes, sha: str, policy: Mapping[str, Any]) -> Item:
+    """Pass A for one file: decode and parse (content beats extension), or quarantine."""
     ext = Path(rel).suffix.lower()
     if len(raw) > int(pol.get(policy, "ingest.max_file_mb", 512)) * 1024 * 1024:
         raise QuarantineError("file_too_large")
     fmt = detect_format(ext, pol.get(policy, "ingest.supported_extensions", ()))
-    text = decode_bytes(raw).text
+    decoded = decode_bytes(raw)
+    text = decoded.text
+    if decoded.encoding == "cp1252" and fmt not in _LEGACY_OK:
+        raise QuarantineError("undecodable_text")
+    depth = int(pol.get(policy, "ingest.max_json_depth", 200))
+    if fmt in ("csv", "tsv") and text.lstrip()[:1] in ("{", "["):
+        try:
+            data = load_json(text, depth)
+            return Item(rel, sha, "json", data, _json_locs(data), infer_order(text) or "dmy")
+        except QuarantineError:
+            pass
+    order = infer_order(text) or "dmy"
     if fmt in ("csv", "tsv"):
         header, rows = read_table(text, "\t" if fmt == "tsv" else ",")
-        return Parsed(rel, sha, fmt, (header, rows), [f"row:{i}" for i in range(len(rows))])
+        return Item(rel, sha, fmt, (header, rows), [f"row:{i}" for i in range(len(rows))], order)
     if fmt == "json":
-        data = load_json(text, int(pol.get(policy, "ingest.max_json_depth", 200)))
-        return Parsed(rel, sha, fmt, data, record_pointers(data))
-    return Parsed(rel, sha, fmt, text, ["doc"])
+        data = load_json(text, depth)
+        return Item(rel, sha, fmt, data, _json_locs(data), order)
+    return Item(rel, sha, "text", text, ["doc"], order)
 
 
-def rewrite_file(item: Parsed, counts: Counter[str]) -> str:
-    """Pass B for one file: return the sanitised text in the original format."""
-    if item.fmt in ("csv", "tsv"):
-        header, rows = item.payload
-        clean_rows = [[clean_text(c, counts) for c in row] for row in rows]
-        return write_table(header, clean_rows, "\t" if item.fmt == "tsv" else ",")
-    if item.fmt == "json":
-        return dump_json(clean_value(item.payload, counts))
-    return clean_text(item.payload, counts)
+def _json_locs(data: Any) -> list[str]:
+    """``doc`` for the whole document, plus a pointer per record of any record collection."""
+    ptrs = record_pointers(data)
+    return ptrs if ptrs == ["doc"] else ["doc"] + ptrs
 
 
 def _safe_dest(san: Path, rel: str) -> Path:
@@ -98,7 +96,7 @@ def run(inp: Path, out: Path, policy: Mapping[str, Any], keys: Keyring) -> int:
     # ---- Pass A: hash, decode, parse
     set_stage("ingest")
     entries: list[FileEntry] = []
-    parsed: list[tuple[FileEntry, Parsed | None]] = []
+    parsed: list[tuple[FileEntry, Item | None]] = []
     for path in paths:
         rel = path.relative_to(inp).as_posix()
         with open(path, "rb") as fh:
@@ -106,7 +104,7 @@ def run(inp: Path, out: Path, policy: Mapping[str, Any], keys: Keyring) -> int:
         sha = hashlib.sha256(raw).hexdigest()
         entry = FileEntry(input_sha256=sha, status="quarantined")
         try:
-            item: Parsed | None = parse_file(rel, raw, sha, policy)
+            item: Item | None = parse_file(rel, raw, sha, policy)
         except QuarantineError as exc:
             entry.reason, item = exc.reason, None
         except Exception as exc:  # noqa: BLE001 - any failure quarantines, never crashes
@@ -114,30 +112,44 @@ def run(inp: Path, out: Path, policy: Mapping[str, Any], keys: Keyring) -> int:
         entries.append(entry)
         parsed.append((entry, item))
 
-    # ---- (linkage happens here from S2 on)
+    # ---- Pass A (cont.): learn the dataset, link records
+    set_stage("learn")
+    pipe = Pipeline(keys, policy)
+    items = [it for _, it in parsed if it is not None]
+    pipe.observe(items)
+    pipe.learn(items)
+
+    # ---- Pass B: rewrite
     set_stage("rewrite")
+    used: set[str] = set()
     for entry, item in parsed:
         if item is None:
             continue
-        counts: Counter[str] = Counter()
         try:
-            text = rewrite_file(item, counts)
-            dest = _safe_dest(san, item.rel)
+            text = pipe.rewrite(item)
+            out_rel = pipe.output_path(item.rel)
+            if out_rel in used:
+                raise QuarantineError("parse_error.name_collision")
+            dest = _safe_dest(san, out_rel)
             dest.parent.mkdir(parents=True, exist_ok=True)
             with open(dest, "w", encoding="utf-8", newline="") as fh:
                 fh.write(text)
+            used.add(out_rel)
         except QuarantineError as exc:
             entry.reason = exc.reason
             continue
         except Exception as exc:  # noqa: BLE001
             entry.reason = f"parse_error.{type(exc).__name__.lower()}"
             continue
-        entry.status, entry.output, entry.reason = "sanitized", f"sanitized/{item.rel}", None
-        report.entities.update(counts)
+        entry.status, entry.output, entry.reason = "sanitized", f"sanitized/{out_rel}", None
         for loc in item.locs:
-            report.records.append(Record(file=entry.output, loc=loc, patient=None))
+            r = rid(item.rel, loc)
+            report.records.append(Record(file=entry.output, loc=loc, patient=pipe.psn.get(r),
+                                         status="generalized" if r in pipe.generalized else None))
 
     set_stage("report")
+    report.entities.update(pipe.entities)
+    report.records_generalized = sum(r.status == "generalized" for r in report.records)
     for entry in entries:
         if entry.status == "quarantined":
             LOG.emit("file.quarantined", sha=sha_prefix(entry.input_sha256), reason=entry.reason)
