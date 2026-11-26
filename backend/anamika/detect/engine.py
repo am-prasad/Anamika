@@ -46,7 +46,7 @@ class Span:
 NAME_TYPES = {"PATIENT_NAME", "RELATIVE_NAME", "PERSON_NAME"}
 PLACE_TYPES = {"ADDRESS", "VILLAGE"}
 _PRIORITY = {"EMAIL": 9, "ABHA_ADDRESS": 9, "ABHA_NUMBER": 9, "AADHAAR": 9, "AADHAAR_MASKED": 9,
-             "PHONE": 8, "PAN": 8, "MRN": 7, "INSURANCE_ID": 7, "PATIENT_NAME": 6,
+             "PHONE": 8, "PAN": 8, "VOTER_ID": 8, "MRN": 7, "INSURANCE_ID": 7, "PATIENT_NAME": 6,
              "RELATIVE_NAME": 5, "PERSON_NAME": 4, "ADDRESS": 3, "VILLAGE": 3, "PIN": 2}
 
 # --------------------------------------------------------------------------- name scanning
@@ -115,6 +115,9 @@ PRE_TITLE_DEVA_RX = _rx(rf"(?<![{DEVA}])(?:{L.PRE_TITLES_DEVA})\s+(?=[{DEVA}])")
 POST_HON_RX = _rx(rf"((?:[A-Z][a-z'’]+\s+){{0,2}}[A-Z][a-z'’]+)\s+{L.POST_HONORIFICS}(?![A-Za-z])")
 POST_HON_DEVA_RX = _rx(rf"((?:[{DEVA}]+\s+){{0,1}}[{DEVA}]+)\s+{L.POST_HONORIFICS_DEVA}(?![{DEVA}])")
 HINGLISH_POSS_RX = _rx(rf"((?:[A-Z][a-z'’]+\s+){{0,2}}[A-Z][a-z'’]+)\s+{L.HINGLISH_PARTICLES}\s+(?=[A-Za-z])")
+KIN_RX = _rx(rf"(?<![A-Za-z]){L.KINSHIP}\s+(?!of\b)(?=[A-Z])", re.IGNORECASE)
+KIN_DEVA_RX = _rx(rf"(?<![{DEVA}]){L.KINSHIP_DEVA}\s+(?=[{DEVA}])")
+PATIENT_WORD_DEVA_RX = _rx(rf"(?<![{DEVA}]){L.PATIENT_WORDS_DEVA}\s+(?=[{DEVA}])")
 PERSON_VERB_RX = _rx(rf"(?<![A-Za-z]){L.PERSON_VERBS}\s+", re.IGNORECASE)
 REPORT_OF_RX = _rx(r"(?<![A-Za-z])Report\s+(?:of|for)\s+(?=[A-Z])", re.IGNORECASE)
 WA_SENDER_RX = _rx(r"(?m)^\[[^\]\n]{5,30}\]\s*(?=[^:\n]{2,40}:)")
@@ -132,6 +135,18 @@ CAPS_FACILITY_RX = _rx(r"(?m)^[A-Z][A-Z .,&'-]{3,}(?:HOSPITAL|SADAN|PATHOLOGY|DI
 TITLE_SEQ_RX = _rx(r"(?<![A-Za-z.])[A-Z][a-z'’]{2,}(?:\s[A-Z][a-z'’]{2,}){1,2}(?![A-Za-z])")
 _EPONYM_USE = re.compile(r"['’]s\b|\s+(?:disease|syndrome|palsy|sign|phenomenon|test|disorder|"
                         r"ulcer|tumou?r|lymphoma|reflex|criteria|scale|score)\b", re.IGNORECASE)
+_ID_CAND = re.compile(r"(?<![A-Za-z0-9])[A-Za-z0-9][A-Za-z0-9/\-.#]*[A-Za-z0-9](?![A-Za-z0-9])")
+_ID_PART = re.compile(r"[A-Za-z0-9]+(?:[/\-][A-Za-z0-9]+)+")
+_DIGIT_RUN = re.compile(r"(?<!\d)\d{5,}(?!\d)")
+_LAT_WORD = re.compile(r"(?<![A-Za-z])[A-Za-z]+(?![A-Za-z])")
+_DEVA_WORD = re.compile(rf"(?<![{DEVA}])[{DEVA}]+(?![{DEVA}])")
+_ANY_WORD = re.compile(rf"(?<![\w{DEVA}])[\w{DEVA}][\w{DEVA}.]*")
+_WORDCHAR = re.compile(rf"[\w{DEVA}]")
+# "Label: value" / "Label - value" segments (line or "|"-separated) and <tag>value</tag>
+LABEL_VALUE_RX = _rx(rf"(?:^|(?<=\|))[ \t]*([A-Za-z{DEVA}][A-Za-z{DEVA} .'’/#()]{{0,30}}?)[ \t]*(?:[:–]|\s-)[ \t]*((?:(?![ \t]{{2,}})[^|\n])+?)[ \t]*(?=\||$|[ \t]{{2,}})",
+                     re.MULTILINE)
+TAG_VALUE_RX = _rx(r"<([A-Za-z_][\w.-]{0,30})>([^<>\n]{1,120})</\1>")
+RESIDENT_RX = _rx(rf"(?<![A-Za-z])(?:resident\s+of|r/o|residing\s+at)\s+|(?<![{DEVA}])निवासी\s+", re.IGNORECASE)
 XML_TAG_RX = _rx(r"<[^>]{0,400}>")
 _COMPLAINT_AFTER_CO = re.compile(r"\s*[:\-]?\s*[a-z]")
 
@@ -216,6 +231,12 @@ class Detector:
             toks = m.group(1).split()
             if toks[-1] not in ("डॉक्टर", "मरीज़", "मरीज", "नर्स"):
                 spans.append(Span(m.start(1), m.end(1), "PERSON_NAME", "honorific.post.deva"))
+        for m in KIN_RX.finditer(text):
+            add(m.end(), "RELATIVE_NAME", "kinship", 2)
+        for m in KIN_DEVA_RX.finditer(text):
+            add(m.end(), "RELATIVE_NAME", "kinship.deva", 2)
+        for m in PATIENT_WORD_DEVA_RX.finditer(text):
+            add(m.end(), "PATIENT_NAME", "patient.word.deva", 3)
         for m in PERSON_VERB_RX.finditer(text):
             add(m.end(), "PERSON_NAME", "verb.by", 3)
         for m in REPORT_OF_RX.finditer(text):
@@ -237,6 +258,13 @@ class Detector:
         for m in ADDRESS_LABEL_RX.finditer(text):
             eol = text.find("\n", m.end())
             spans.extend(address_spans(text, m.end(), len(text) if eol < 0 else eol))
+        for m in RESIDENT_RX.finditer(text):
+            s2 = scan_name(text, m.end(), 3)
+            if s2:
+                spans.append(Span(s2[0], s2[1], "VILLAGE", "label.resident"))
+        for rx in (LABEL_VALUE_RX, TAG_VALUE_RX):
+            for m in rx.finditer(text):
+                spans.extend(role_spans(text, m.group(1), m.start(2), m.end(2)))
         for m in VILLAGE_LABEL_RX.finditer(text):
             s = scan_name(text, m.end(), 3)
             if s:
@@ -245,27 +273,51 @@ class Detector:
 
     # ---------------------------------------------------------------- lexicon
     def lexicon_spans(self, text: str, any_case: bool) -> list[Span]:
-        """Occurrences of names, IDs and places learned from this dataset."""
+        """Occurrences of names, IDs and places learned from this dataset (token-indexed)."""
         lex, spans = self.lex, []
-        if lex.id_rx is not None:
-            spans += [Span(m.start(), m.end(), "MRN", "lex.id") for m in lex.id_rx.finditer(text)]
-        if lex.core_rx is not None:
-            spans += [Span(m.start(), m.end(), "MRN", "lex.idcore") for m in lex.core_rx.finditer(text)]
-        if lex.name_rx is not None:
-            for m in lex.name_rx.finditer(text):
+        if not lex._compiled:
+            return spans
+        if lex.id_set or lex.core_set:
+            for m in _ID_CAND.finditer(text):
                 tok = m.group(0)
+                if tok.upper() in lex.id_set:
+                    spans.append(Span(m.start(), m.end(), "MRN", "lex.id"))
+                    continue
+                for sub in _ID_PART.finditer(tok):  # an ID embedded in a longer token
+                    if sub.group(0).upper() in lex.id_set:
+                        spans.append(Span(m.start() + sub.start(), m.start() + sub.end(), "MRN", "lex.id"))
+            if lex.core_set:
+                for m in _DIGIT_RUN.finditer(text):
+                    if m.group(0) in lex.core_set:
+                        spans.append(Span(m.start(), m.end(), "MRN", "lex.idcore"))
+        if lex.name_set:
+            for m in _LAT_WORD.finditer(text):
+                tok = m.group(0)
+                low = tok.casefold()
+                if low not in lex.name_set:
+                    continue
                 title = tok[0].isupper() and not tok.isupper()
-                if not any_case and tok.casefold() in L.CLINICAL_WORDS and _EPONYM_USE.match(text, m.end()):
+                if not any_case and low in L.CLINICAL_WORDS and _EPONYM_USE.match(text, m.end()):
                     continue  # "Wilson's disease", "Graves disease": an eponym, not a person
                 if any_case or title:
                     if not any_case and lex.is_common_word(tok):
                         continue
                     spans.append(Span(m.start(), m.end(), "PERSON_NAME", "lex.name"))
-        if lex.deva_rx is not None:
-            spans += [Span(m.start(), m.end(), "PERSON_NAME", "lex.name.deva")
-                      for m in lex.deva_rx.finditer(text)]
-        if lex.place_rx is not None:
-            spans += [Span(m.start(), m.end(), "VILLAGE", "lex.place") for m in lex.place_rx.finditer(text)]
+        if lex.deva_set:
+            for m in _DEVA_WORD.finditer(text):
+                if m.group(0) in lex.deva_set:
+                    spans.append(Span(m.start(), m.end(), "PERSON_NAME", "lex.name.deva"))
+        if lex.place_first:
+            low_text = text.casefold()
+            for m in _ANY_WORD.finditer(low_text):
+                cands = lex.place_first.get(m.group(0))
+                if not cands:
+                    continue
+                for p in cands:
+                    end = m.start() + len(p)
+                    if low_text.startswith(p, m.start()) and not (end < len(low_text) and _WORDCHAR.match(low_text[end])):
+                        spans.append(Span(m.start(), end, "VILLAGE", "lex.place"))
+                        break
         return spans
 
     def heuristic_names(self, text: str) -> list[Span]:
@@ -324,6 +376,38 @@ def expand_name(text: str, s: Span) -> Span:
     return Span(start, end, s.etype, s.rule) if (start, end) != (s.start, s.end) else s
 
 
+_ROLE_ETYPE = {"patient_name": "PATIENT_NAME", "first_name": "PATIENT_NAME", "last_name": "PATIENT_NAME",
+               "local_name": "PATIENT_NAME", "person_name": "PERSON_NAME", "relative_name": "RELATIVE_NAME",
+               "guardian": "RELATIVE_NAME", "phone": "PHONE", "email": "EMAIL", "aadhaar": "AADHAAR",
+               "abha": "ABHA_NUMBER", "abha_address": "ABHA_ADDRESS", "pan": "PAN", "mrn": "MRN",
+               "insurance": "INSURANCE_ID", "village": "VILLAGE", "locality": "ADDRESS", "house": "ADDRESS",
+               "pin": "PIN"}
+
+
+def role_spans(text: str, label: str, start: int, end: int) -> list[Span]:
+    """Spans for a labelled value whose label the field classifier recognises (any language)."""
+    from .columns import ADDRESS, classify_label
+
+    role = classify_label(label.strip())
+    if role is None:
+        return []
+    if role == ADDRESS:
+        return address_spans(text, start, end)
+    etype = _ROLE_ETYPE.get(role)
+    if etype is None:
+        return []
+    value = text[start:end]
+    if etype in ("PATIENT_NAME", "PERSON_NAME", "RELATIVE_NAME"):
+        s = scan_name(text, start, 4)
+        return [Span(s[0], s[1], etype, "label.field")] if s else []
+    if etype == "PIN":
+        m = re.search(r"[1-8]\d{5}", value)
+        return [Span(start + m.start(), start + m.end(), "PIN", "label.field")] if m else []
+    if etype in ("PHONE", "AADHAAR", "ABHA_NUMBER", "MRN", "INSURANCE_ID") and not re.search(r"\d", value):
+        return []
+    return [Span(start, end, etype, "label.field")]
+
+
 def address_spans(text: str, start: int, end: int) -> list[Span]:
     """Spans for an address value: every comma segment except Tehsil / District clauses.
 
@@ -349,6 +433,17 @@ def address_spans(text: str, start: int, end: int) -> list[Span]:
     return spans
 
 
+_GUESS_RULES = ("heur.", "lex.name", "honorific", "title.", "hinglish.")
+
+
+def _rank(s: Span) -> int:
+    """Strong identifiers first; among names and places an explicit label beats a guess."""
+    base = _PRIORITY.get(s.etype, 0)
+    if s.etype in NAME_TYPES or s.etype in PLACE_TYPES:
+        base = 3 if s.rule.startswith(_GUESS_RULES) else 6.5  # type: ignore[assignment]
+    return base
+
+
 def resolve(spans: list[Span]) -> list[Span]:
     """Merge overlapping spans; the merged span takes the highest-priority type."""
     if not spans:
@@ -358,7 +453,7 @@ def resolve(spans: list[Span]) -> list[Span]:
     for s in spans[1:]:
         last = out[-1]
         if s.start < last.end:
-            best = max((last, s), key=lambda x: (_PRIORITY.get(x.etype, 0), x.end - x.start))
+            best = max((last, s), key=lambda x: (_rank(x), x.end - x.start))
             out[-1] = Span(last.start, max(last.end, s.end), best.etype, best.rule)
         else:
             out.append(s)
