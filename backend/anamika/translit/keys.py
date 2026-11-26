@@ -55,6 +55,7 @@ def fold(token: str) -> str:
     return t
 
 
+@lru_cache(maxsize=131072)
 def skeleton(token: str) -> str:
     """First letter + consonants of the folded token (``sunita`` → ``snt``)."""
     f = fold(to_latin(token))
@@ -63,6 +64,7 @@ def skeleton(token: str) -> str:
     return f[0] + re.sub(r"[aeiouy]", "", f[1:])
 
 
+@lru_cache(maxsize=131072)
 def name_key(value: str | None) -> str | None:
     """Order-independent cross-script key for a person's name (``None`` if nothing left)."""
     if not value:
@@ -75,6 +77,7 @@ def name_key(value: str | None) -> str | None:
     return " ".join(keys) if keys else None
 
 
+@lru_cache(maxsize=131072)
 def place_key(value: str | None) -> str | None:
     """Cross-script key for a village / locality name."""
     if not value:
