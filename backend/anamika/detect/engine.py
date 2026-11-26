@@ -193,7 +193,12 @@ class Detector:
             if s and s[1] > s[0]:
                 spans.append(Span(s[0], s[1], etype, rule))
 
+        # "पति का नाम" / "Husband Name" end in a bare patient label ("नाम", "Name"); a patient
+        # label inside a relative label belongs to the relative, never to the patient
+        rel_labels = [(m.start(), m.end()) for m in RELATIVE_LABEL_RX.finditer(text)]
         for m in PATIENT_LABEL_RX.finditer(text):
+            if any(a <= m.start() and m.end() <= b for a, b in rel_labels):
+                continue
             add(m.end(), "PATIENT_NAME", "label.patient")
         for m in PT_DOT_RX.finditer(text):
             add(m.end(), "PATIENT_NAME", "label.pt")

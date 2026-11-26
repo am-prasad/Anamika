@@ -32,3 +32,12 @@ Practice data; `tools/attacker.py` risks are ratios to raw; resistance = 1 − w
 | **state, 10-yr, PIN0, DOB removed (= balanced)** | **0.914** | 0.06 | 0.02 | 0.33 | 98.1% | 97.42% |
 | state, 20-yr, PIN0, DOB removed, rare_k 4 (= strict) | 0.917 | 0.04 | 0.02 | 0.33 | 97.4% | 97.2% |
 | first rare-suppression attempt (all clinical fields) | 0.642 | 0.26 | 0.87 | 0.64 | **87.7%** | 96.5% |
+
+### 2026-11-26 · S5 · detect: relative labels ending in a bare "नाम"/"Name"
+"पति का नाम", "पिता का नाम", "Husband Name" ended in the bare patient label, so the relative's name was rewritten to the patient's pseudonym. Patient-label matches inside a relative label are now skipped.
+
+| Run | Leaks | Canaries | Link P / R / F0.5 | False merges | Medical kept | LOS exact | Age bands true | Tests |
+|---|---|---|---|---|---|---|---|---|
+| practice, balanced | 0 / 3230 | 0 | 1.00 / 0.99 / 1.00 | 0 | 98.1% | 34/34 | 359/359 | 274 passed |
+
+Hindi relative lines in the release: 10 of 10 now `[RELATIVE]` (before: the 3 `पति का नाम` lines carried the patient's pseudonym).

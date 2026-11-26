@@ -136,3 +136,22 @@ def test_debug_spans_are_value_free_and_outside_output(tmp_path: Path) -> None:
     info = json.loads(blob)
     assert {s["type"] for s in info["spans"]} >= {"PATIENT_NAME", "PHONE"}
     assert run(inp, tmp_path / "o2", "--debug-spans", str(tmp_path / "o2" / "x")).returncode == 2
+
+
+@pytest.mark.parametrize("text,value", [
+    ("पति का नाम: सुरेश वर्मा\n", "सुरेश वर्मा"),
+    ("पिता का नाम: रामलाल यादव\n", "रामलाल यादव"),
+    ("Husband Name: Dinesh Rawat\n", "Dinesh Rawat"),
+    ("Father's Name: Harish Negi\n", "Harish Negi"),
+])
+def test_relative_label_ending_in_name_is_relative(text: str, value: str) -> None:
+    """A relative label that ends in a bare "नाम"/"Name" must not make the relative the patient."""
+    hits = found(text, det("Suresh Verma", "Ramlal Yadav", "Dinesh Rawat", "Harish Negi"))
+    assert ("RELATIVE_NAME", value) in hits
+    assert not any(e == "PATIENT_NAME" for e, _ in hits)
+
+
+def test_patient_label_still_works_next_to_relative() -> None:
+    hits = found("मरीज़ का नाम: पार्वती देवी\nपति का नाम: सुरेश वर्मा\n")
+    assert ("PATIENT_NAME", "पार्वती देवी") in hits
+    assert ("RELATIVE_NAME", "सुरेश वर्मा") in hits
