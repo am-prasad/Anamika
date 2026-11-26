@@ -16,3 +16,19 @@ The official score is estimated only from the kit's stated starter level.
 | 2026-11-26 | S2 | cross-script keys, name+village+age, unique-only fragment keys | dev 0.0% · fuzz 0.0% | 0 / 0 / 0% | 0/4 | 100% | **dev 1.00 (R 0.99) · fuzz 0.99 (R 0.97)** | 0.0% | 0 | OK + READY | 2.6 s / 43 MB (bench); 1,245 files 20.4 s / 63 MB | — |
 | 2026-11-26 | S3 | utility tool (token retention), district `city` kept | 0.0% | 0 / 0 / 0% | 0/4 | 100% · retention 99.66% · clean 100% | 1.00 (R 0.99) | 0.0% | 0 | OK | 2.6 s | — |
 | 2026-11-26 | S3 | 13 novel templates; label/tag classifier in text, kinship, resident-of, clinical role, JSON tables, voter/landline/masked phone | dev 0.0% · fuzz 0.0% · novel 0 leaks | 0 / 0 / 0% | 0/4 | 100% · 99.66% | dev 1.00 · fuzz 0.99 | 0.0% | 0 | OK + READY | 2.3 s / 41 MB; 1,245 files 12.1 s / 58 MB | — |
+| 2026-11-26 | S4 | attacker A1–A7; FHIR `lastUpdated` shifted; location level, DOB policy; FS weak-merge gate; **balanced default** | dev 0.0% · fuzz 0.0% · novel 0 | 0 / 0 / 0% | 0/4 | 98.1% · 97.4% | dev 1.00 · fuzz 0.99 | 0.0% | 0 | OK + READY | 2.5 s / 41 MB; 1,245 files 13.9 s / 59 MB | **resistance 0.914 (≈ 22.8/25)** |
+
+## S4 privacy grid
+
+Practice data; `tools/attacker.py` risks are ratios to raw; resistance = 1 − weighted risk.
+
+| Variant | Resistance | A2/A3 | A4 | A5 | Medical kept | Retention |
+|---|---|---|---|---|---|---|
+| tehsil, 5-yr, PIN3, DOB shift (= research) | 0.627 | 0.28 | 0.91 | 0.65 | 100% | 99.66% |
+| district, 5-yr, PIN3, DOB shift | 0.642 | 0.26 | 0.87 | 0.64 | 100% | 98.63% |
+| district, 10-yr, PIN0, DOB shift | 0.648 | 0.23 | 0.87 | 0.64 | 100% | 98.63% |
+| district, 10-yr, PIN0, DOB removed | 0.789 | 0.13 | 0.34 | 0.56 | 100% | 98.57% |
+| district, 20-yr, PIN0, DOB removed | 0.818 | 0.09 | 0.23 | 0.56 | 100% | 98.57% |
+| **state, 10-yr, PIN0, DOB removed (= balanced)** | **0.914** | 0.06 | 0.02 | 0.33 | 98.1% | 97.42% |
+| state, 20-yr, PIN0, DOB removed, rare_k 4 (= strict) | 0.917 | 0.04 | 0.02 | 0.33 | 97.4% | 97.2% |
+| first rare-suppression attempt (all clinical fields) | 0.642 | 0.26 | 0.87 | 0.64 | **87.7%** | 96.5% |

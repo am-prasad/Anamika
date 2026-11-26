@@ -92,3 +92,26 @@ lookups are token set membership, not regex alternations.
 **Q: Can judges see why something was redacted?**
 Yes. `--debug-spans DIR` writes, per file, the span offsets, entity types and the rule that fired, with no
 values and outside the release folder. The demo console reads it.
+
+## Stage 4: Privacy
+
+**Q: How do you know your release resists the attacker?**
+We implemented the published attack (registry linkage, profile pooling, targeted known facts with
+shift recovery, pseudonym inversion, cross-release) and ran it on raw and released data. Default
+resistance is 0.914: profile re-identification drops from 98% to 2% of patients, the targeted attack from 82% to 27%.
+
+**Q: Why remove DOB and generalise to state? Isn't that a lot of utility?**
+We measured it. A shifted DOB still gives the birth year, and district + gender + band was near-unique
+in a registry of about 30 people per district. Removing both costs 1.9% of preserve-probes and some
+generalisation credit (about 1 point) and buys about 7 privacy points. Every dose, lab, vital,
+diagnosis code, interval and length of stay is untouched. A `research` preset keeps tehsil and
+5-year bands for internal use.
+
+**Q: Why not suppress rare diseases?**
+We built it and measured it: it didn't reduce the targeted attack, which is driven by visit dates and
+hospital, and it cost clinical value. So it is opt-in (`strict`), limited to diagnosis and procedure
+text, and it always keeps the ICD code.
+
+**Q: Can you show why two same-name patients were not merged?**
+Yes. The identity graph lists every pair kept apart and the conflicting attribute (`dob`, `age`,
+`fs_score`) without values. The console draws it.

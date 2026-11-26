@@ -40,3 +40,9 @@ listed by SHA-256 with a reason from a closed vocabulary (`unsupported_format`,
 
 The input is opened read-only, the output may not sit inside the input tree, and
 `backend/tools/determinism.py` re-hashes the input after three runs.
+
+## Service-layer data exposure (S4)
+
+- **Explanations** (`--debug-spans`, `/explain`, `/graph`) carry offsets, types, rule ids, sanitised paths and pseudonyms, never values. They are written outside `{output}` and named by SHA prefix.
+- **Originals** are served only by `/compare`, only for server-side datasets, only with `ANAMIKA_ALLOW_ORIGINALS=true`. The service refuses to start with that flag in production.
+- **Attack and utility verification** read the answer key and registry of demo datasets inside the worker and return rates and counts only.
