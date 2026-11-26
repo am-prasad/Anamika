@@ -23,7 +23,7 @@ export function TopBar({ datasets, presets, offline }: { datasets: Dataset[]; pr
     router.push(`${path}?${q}`);
   };
 
-  const status = offline ? "offline" : running ? "running" : run?.core?.status === "failed" ? "failed" : run?.core ? "ready" : "idle";
+  const status = offline ? "offline" : run === undefined ? "checking" : running ? "running" : run?.core?.status === "failed" ? "failed" : run?.core ? "ready" : "idle";
   const ordered = PRESET_ORDER.filter((p) => presets.some((x) => x.name === p));
 
   return (
@@ -74,13 +74,14 @@ export function TopBar({ datasets, presets, offline }: { datasets: Dataset[]; pr
               status === "ready" && "bg-teal-400 animate-live",
               status === "running" && "bg-amber-400 animate-live",
               status === "failed" && "bg-rose-500",
-              (status === "idle" || status === "offline") && "bg-text-faint",
+              (status === "idle" || status === "offline" || status === "checking") && "bg-text-faint",
             )}
           />
           {status === "ready" && "Live · last run complete"}
           {status === "running" && "Running pipeline"}
           {status === "failed" && "Last run failed"}
           {status === "idle" && "No run yet"}
+          {status === "checking" && "Checking runs"}
           {status === "offline" && "Backend offline"}
         </span>
         <button

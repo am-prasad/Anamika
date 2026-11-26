@@ -41,7 +41,7 @@
 
   --font-display: var(--font-display-face), var(--font-deva-face), ui-serif, serif;
   --font-sans: var(--font-sans-face), var(--font-deva-face), ui-sans-serif, sans-serif;
-  --font-mono: var(--font-mono-face), ui-monospace, monospace;
+  --font-mono: var(--font-mono-face), var(--font-deva-face), ui-monospace, monospace;
   --font-deva: var(--font-deva-face), var(--font-sans-face), sans-serif;
   --font-deva-display: var(--font-deva-display-face), serif;
 
@@ -194,4 +194,9 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+@keyframes route {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
 }
