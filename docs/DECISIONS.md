@@ -74,3 +74,16 @@
 ## ADR-016 · Weak name evidence only with a second clue, and fragments only attach
 **Decision:** cross-script name keys link only together with a village (age ±2) or a relative. First-name + relative keys can only attach singleton records to one already-anchored cluster.
 **Why:** the scorer weighs precision twice as much as recall (F0.5). The homonym trap puts same-name people in the data on purpose.
+
+## ADR-017 · One field classifier for headers, keys, text labels and tags
+**Decision:** `classify_label` decides roles for CSV headers, JSON keys, `label: value` text and `<tag>value</tag>`.
+**Alternatives:** separate label regexes per channel.
+**Why:** a synonym learned for one channel immediately protects all of them, which matters most when the chaos round renames labels.
+
+## ADR-018 · Explicit evidence outranks heuristics when spans overlap
+**Decision:** when spans overlap, label-based name and place spans decide the type over lexicon and capitalisation guesses. Strong identifiers still outrank both.
+**Why:** a correct type gives the right placeholder and evidence (a village stays a village), while redaction coverage is unchanged.
+
+## ADR-019 · Token-indexed lexicon matching
+**Decision:** names, IDs and places are matched by tokenising once and looking up sets (multi-word places through a first-word index), instead of compiling growing regex alternations.
+**Why:** runtime grew super-linearly with lexicon size; the token index made it linear (exponent ≈ 0.91) and 40% faster on 1,245 files.

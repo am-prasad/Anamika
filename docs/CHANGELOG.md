@@ -35,3 +35,15 @@
 - Cross-script phonetic name keys; name + village + age, name + relative and unique-only fragment keys under cannot-link constraints.
 - Bench under 2 pinned CPUs and a 4 GB cap: 200 files 2.6 s / 43 MB; 1,245 files 20.4 s / 63 MB.
 - Practice: 0 leaks, link F0.5 1.00 (R 0.99), 0 false merges. Fuzz ×3: 0 leaks, F0.5 0.99, 0 false merges. 224 tests. Tagged `v1-safe` locally.
+
+
+## S3 · Detection & meaning-trap hardening (2026-11-26)
+
+- Utility self-check (preserve-probes by kind, token retention overall and on clean documents).
+- 13 novel template shapes in the fuzz set (XML-in-text, ALL-CAPS registers, referral letters, SMS, mixed script, Hinglish labels, headerless CSV, Devanagari headers, JSON `columns` + `rows`, unseen JSON keys).
+- Field classifier reused in free text: `label: value`, `label - value`, `|` segments and `<tag>value</tag>`; `resident of` / `r/o` / `निवासी`; kinship words; `मरीज़ <name>`; explicit labels outrank guesses.
+- Clinical role pins diagnosis / complaint / drug / test columns; Devanagari category columns never profiled as names; district-level `city` kept.
+- Voter ID (EPIC), STD landlines and masked mobiles.
+- `--debug-spans DIR`: value-free span / role / rule explanations outside the release.
+- Token-indexed lexicon matcher and cached classifiers: 1,245 files 20.4 s → 12.1 s (linear).
+- Practice: 0 leaks, 100% probes, 99.66% retention, link F0.5 1.00. Fuzz ×3 and novel templates: 0 leaks. 262 tests.

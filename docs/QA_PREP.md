@@ -73,3 +73,22 @@ them; they can never bridge two people.
 **Q: Will it fit in 2 CPUs, 4 GB and 15 minutes?**
 Measured under `taskset` and a 4 GB `ulimit`: 2.6 s and 43 MB for the practice set, 20 s and 63 MB for a
 6× larger set (growth exponent ≈ 1.13).
+
+## Stage 3: Detection hardening
+
+**Q: What if the hidden data uses a label you've never seen?**
+Every label our field classifier knows works in every channel: CSV headers, JSON keys, text labels and
+XML-like tags. Unknown labels fall back to value shape and the run-time lexicon. Thirteen invented
+formats showed 0 leaks.
+
+**Q: How do you prove you don't over-redact?**
+We measure what the scorer measures. All 4,855 preserve-probes are kept, 99.66% of non-PII words survive,
+and 100% on clean documents. Clinical columns have a pinned role, so a name heuristic can never touch them.
+
+**Q: Will it scale?**
+On two pinned CPUs: 2.3 s for 200 files, 12 s for 1,245, under 60 MB. Cost is linear because lexicon
+lookups are token set membership, not regex alternations.
+
+**Q: Can judges see why something was redacted?**
+Yes. `--debug-spans DIR` writes, per file, the span offsets, entity types and the rule that fired, with no
+values and outside the release folder. The demo console reads it.
