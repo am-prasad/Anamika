@@ -29,6 +29,7 @@ export interface Verification {
     canary_tokens_total: number;
     side_channel_hits: Record<string, number>;
     by_script?: Record<string, [number, number]>;
+    by_type?: Record<string, [number, number]>;
   };
   utility?: UtilityResult;
   attack?: AttackResult | { available: false };

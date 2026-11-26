@@ -166,7 +166,18 @@ def _attack(paths: storage.JobPaths, rotated: Path | None, input_dir: Path, trut
 def _leak_scan(paths: storage.JobPaths, input_dir: Path, truth: Path) -> dict[str, Any]:
     from tools.leak_scan import scan
 
-    res = scan(paths.output, input_dir, truth, [paths.work])
+    # Side channels are logs, temp files and stray artefacts. The determinism reruns under
+    # work/ are full releases with their own legitimate kept values (e.g. "Ward 3"); they are
+    # checked byte for byte against this release, so only their logs count as side channels.
+    extras: list[Path] = []
+    if paths.work.is_dir():
+        for p in sorted(paths.work.iterdir()):
+            if p.is_dir() and (p / "report.json").is_file():
+                if (p / "logs").is_dir():
+                    extras.append(p / "logs")
+            else:
+                extras.append(p)
+    res = scan(paths.output, input_dir, truth, extras)
     res.pop("worst_files", None)  # hashed file ids are of no use to API clients
     return res
 
