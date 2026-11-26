@@ -46,7 +46,7 @@ _RELATIVE_LINE = re.compile(r"(?i)(?:attendant|guardian|S/O|D/O|W/O|C/O|father|h
 HARVEST_NAME_RULES = {"label.patient", "label.pt", "label.relative", "relation.marker",
                       "relation.deva", "title.pre", "title.pre.deva", "report.of", "verb.by",
                       "whatsapp.sender", "honorific.post", "honorific.post.deva", "relation.subject",
-                      "hinglish.possessive"}
+                      "hinglish.possessive", "kinship", "kinship.deva", "patient.word.deva"}
 PATIENT_RULES = {"label.patient", "label.pt", "report.of", "relation.subject"}
 
 
@@ -103,6 +103,15 @@ class Pipeline:
                 self._learn_csv(it)
             elif it.fmt == "json":
                 self._walk(it.payload, [], None, lambda *a: self._learn_leaf(*a), None)
+                for node, header, rows_key in _iter_tables(it.payload):
+                    cols = list(zip(*node[rows_key]))
+                    for j, h in enumerate(header):
+                        vals = [str(x) for x in cols[j] if x is not None]
+                        role = C.classify_column(h, vals)
+                        if role == C.TEXT:
+                            role = C.profile_people_places(vals, self.lex.is_common_word) or C.TEXT
+                        for v in vals:
+                            self._feed(role, v)
         for it in items:
             for s in _text_strings(it):
                 self._harvest(s)
@@ -136,6 +145,9 @@ class Pipeline:
                 it.order = hint
             for v in values:
                 self._feed(role, v)
+            if role == C.CLINICAL:
+                for v in set(values):
+                    self.lex.add_safe_phrase(v)
             if role == C.TEXT:
                 counts = Counter(v for v in values if v)
                 for v, n in counts.items():
@@ -305,7 +317,7 @@ class Pipeline:
         for s in self.det.detect(t):
             val = t[s.start:s.end]
             line = t[t.rfind("\n", 0, s.start) + 1: (t.find("\n", s.end) + 1 or len(t) + 1) - 1]
-            if s.etype == "MRN" and s.rule in ("label.id", "lex.id"):
+            if s.etype == "MRN" and s.rule in ("label.id", "lex.id", "label.field"):
                 ev.keys.add("mrn:" + val.upper())
             elif s.etype == "PHONE" and not _RELATIVE_LINE.search(line):
                 k = phone_key(val)
@@ -408,7 +420,7 @@ class Pipeline:
         return {"PATIENT_NAME": "[NAME]", "PERSON_NAME": "[NAME]", "RELATIVE_NAME": "[RELATIVE]",
                 "PHONE": "[PHONE]", "EMAIL": "[EMAIL]", "AADHAAR": "[AADHAAR]",
                 "AADHAAR_MASKED": "[AADHAAR]", "ABHA_NUMBER": "[ABHA]", "ABHA_ADDRESS": "[ABHA]",
-                "PAN": "[PAN]", "INSURANCE_ID": "[INSURANCE_ID]", "ADDRESS": "[ADDRESS]",
+                "PAN": "[PAN]", "VOTER_ID": "[VOTER_ID]", "INSURANCE_ID": "[INSURANCE_ID]", "ADDRESS": "[ADDRESS]",
                 "VILLAGE": "[VILLAGE]"}.get(s.etype, "[REDACTED]")
 
     # ---------------------------------------------------------------- fields
@@ -434,6 +446,9 @@ class Pipeline:
             self.entities[ent or "OTHER"] += 1
             return F.PLACEHOLDER[role]
         if role == C.VILLAGE:
+            toks = re.findall(r"[A-Za-z]{3,}", s)
+            if toks and all(t.casefold() in self.lex.protected for t in toks):
+                return value  # already a tehsil / district: generalised, research value
             self.entities["VILLAGE"] += 1
             self.generalized.add(record)
             return location.generalise_village((row or {}).get(C.TEHSIL))
@@ -464,6 +479,8 @@ class Pipeline:
             return b
         if role in (C.GENDER, C.TEHSIL, C.DISTRICT, C.STATE, C.RELATION, C.DOCTOR, C.FACILITY, C.KEEP):
             return value
+        if role == C.CLINICAL:
+            return self.text(s, psn, offset, order, record) if isinstance(value, str) else value
         if isinstance(value, (int, float)):
             return value
         return self.text(s, psn, offset, order, record)
@@ -556,6 +573,24 @@ class Pipeline:
 
     def _json_node(self, node: Any, path: list[str], resource: str | None, psn: str | None,
                    off: int, order: str, record: str, key: str = "") -> Any:
+        if isinstance(node, dict) and table_shape(node):
+            header, rows_key = table_shape(node)  # type: ignore[misc]
+            cols = list(zip(*node[rows_key]))
+            roles = []
+            for j, h in enumerate(header):
+                vals = [str(x) for x in cols[j] if x is not None]
+                role = C.classify_column(h, vals)
+                if role == C.TEXT:
+                    role = C.profile_people_places(vals, self.lex.is_common_word) or C.TEXT
+                roles.append(role)
+            out = {}
+            for k, v in node.items():
+                if k == rows_key:
+                    out[k] = [[self.field(roles[j], x, psn, off, order, record) for j, x in enumerate(row)]
+                              for row in v]
+                else:
+                    out[k] = self._json_node(v, path + [k], resource, psn, off, order, record, key=k)
+            return out
         if isinstance(node, dict):
             res = node.get("resourceType") if isinstance(node.get("resourceType"), str) else resource
             out: dict[str, Any] = {}
@@ -597,6 +632,37 @@ class Pipeline:
             return base64.b64encode(b"[ATTACHMENT REMOVED]").decode()
         clean = self.text(inner, psn, off, order, record)
         return base64.b64encode(clean.encode("utf-8")).decode()
+
+    # ---------------------------------------------------------------- explainability
+    def explain(self, it: Item) -> dict[str, Any]:
+        """Value-free explanation of what was found in a file (for ``--debug-spans``).
+
+        Text: character spans with entity type and the rule that fired, plus date and
+        age hits. CSV: the role of every column. JSON: the role of every classified leaf
+        path. Never contains the values themselves.
+        """
+        info: dict[str, Any] = {"format": it.fmt, "records": len(it.locs)}
+        if it.fmt == "text":
+            t = it.payload
+            info["spans"] = [{"start": s.start, "end": s.end, "type": s.etype, "rule": s.rule}
+                             for s in self.det.detect(t)]
+            info["kept"] = [{"start": a, "end": b, "type": "PROTECTED"} for a, b in self.det.protected(t)
+                            if not t[a:b].startswith("<")]
+            info["dates"] = [{"start": h.start, "end": h.end} for h in dates.find_dates(t, it.order)]
+        elif it.fmt in ("csv", "tsv"):
+            info["columns"] = [{"index": j, "role": r} for j, r in enumerate(it.roles)]
+        else:
+            paths: Counter[tuple[str, str]] = Counter()
+
+            def leaf(k: str, p: list[str], r: str | None, v: Any) -> Any:
+                role = F.json_role(k, p, r, v)
+                if role:
+                    paths[("/" + "/".join(F.norm_key(x) for x in p + [k]), role)] += 1
+                return v
+
+            self._walk(it.payload, [], None, leaf, None)
+            info["fields"] = [{"path": pth, "role": role, "count": n} for (pth, role), n in sorted(paths.items())]
+        return info
 
     # ---------------------------------------------------------------- walkers
     def _walk(self, node: Any, path: list[str], resource: str | None,
@@ -641,6 +707,33 @@ _DEVA_RUN = re.compile(r"[\u0900-\u0963\u0970-\u097F]+")
 #: treated as a possible name (file names carry no clinical value worth the risk).
 _DEVA_DOC_WORDS = frozenset("पर्चा रिपोर्ट डिस्चार्ज सारांश जांच नोट्स पंजीकरण बिल दवा".split())
 _FHIR_KEYS = {"resourceType", "id", "meta", "text", "div", "status", "entry", "resource", "fullUrl"}
+
+
+def table_shape(node: Any) -> tuple[list[str], str] | None:
+    """``{"columns": [...names], "rows": [[...], ...]}`` → (header, rows key), else ``None``."""
+    if not isinstance(node, dict):
+        return None
+    header = next((v for v in node.values() if isinstance(v, list) and v
+                   and all(isinstance(x, str) for x in v)), None)
+    if header is None:
+        return None
+    for k, v in node.items():
+        if isinstance(v, list) and v and all(isinstance(r, list) and len(r) == len(header) for r in v):
+            return header, k
+    return None
+
+
+def _iter_tables(data: Any):  # type: ignore[no-untyped-def]
+    stack = [data]
+    while stack:
+        n = stack.pop()
+        if isinstance(n, dict):
+            t = table_shape(n)
+            if t:
+                yield n, t[0], t[1]
+            stack.extend(n.values())
+        elif isinstance(n, list):
+            stack.extend(n)
 
 
 def _collections(it: Item) -> set[str]:
