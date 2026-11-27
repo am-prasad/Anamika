@@ -22,6 +22,7 @@ dashboard/dist/
 backend/.data/
 datasets/
 .env
+.next/
 
 # internal stage reports (kept locally, not published)
 docs/stages/
