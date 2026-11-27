@@ -131,3 +131,28 @@ Two bugs. A Hindi husband's-name line took the patient's pseudonym, now fixed wi
 the job leak scan counted ward labels like "Ward 3" inside rerun copies as side-channel hits; reruns are now compared byte
 for byte instead.
 
+
+## Desk review · likely questions
+
+**Q: Do you use any machine-learning model? How many parameters?**
+None. Detection is checksummed patterns, a context engine (labels, relation markers, honorifics, Hinglish particles), field
+profiling and a run-time lexicon learned from the dataset itself. Linkage is classical record linkage (union-find, phonetic keys,
+a Fellegi–Sunter gate). Zero parameters, nothing downloaded, nothing to explain away.
+
+**Q: What is your re-identification risk in one number?**
+On our implementation of the published attack: profile re-identification falls from 97.9% of patients on the raw data to 2.1% on
+the release; weighted resistance over all six attacks is 0.916. The weakest point is the targeted attack (82% → 26%), because visit
+date and hospital still narrow the pool. We say so in the brief.
+
+**Q: How do you know it generalises to the hidden sets?**
+We built a generator that replaces every name with invented ones, renames labels and headers, re-renders dates and re-encodes
+files. On four such sets: 0 leaks by our scan (1 of 3,291 by the practice checker, a quarantined binary's file name), F0.5 0.99,
+0 false merges, 98.1% medical values kept. It also runs byte-identically on Python 3.10 and 3.12.
+
+**Q: What happens if a file is half-readable?**
+It is quarantined whole with a reason; we never publish a partially sanitised file. Every input is accounted for in report.json
+by SHA-256, and the run exits 0 only if sanitised + quarantined equals the input count.
+
+**Q: What would you build next with a hospital partner?**
+An on-prem research-data gateway: the same pipeline behind the FastAPI service, a policy per data-sharing agreement, and the
+attack and utility report attached to every release as evidence for DPDP and ABDM reviews.

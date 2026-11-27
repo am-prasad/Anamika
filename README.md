@@ -12,6 +12,8 @@ generalised so that a voter-list attacker cannot single anyone out.
 ![tests](https://img.shields.io/badge/tests-274%20passing-0E9F8E)
 ![api](https://img.shields.io/badge/API-FastAPI%20%C2%B7%20Docker-0F1B2D)
 ![contract](https://img.shields.io/badge/validate__output-CONTRACT%20OK-0E9F8E)
+![submission](https://img.shields.io/badge/check__submission-READY%20TO%20SUBMIT-0E9F8E)
+[![ci](https://github.com/ampere207/Anamika/actions/workflows/ci.yml/badge.svg)](https://github.com/ampere207/Anamika/actions/workflows/ci.yml)
 ![offline](https://img.shields.io/badge/runtime-offline%20%C2%B7%20CPU%20%C2%B7%20no%20LLM-0F1B2D)
 ![stage](https://img.shields.io/badge/stage-S5%20console%20complete-F2A900)
 ![privacy](https://img.shields.io/badge/attack%20resistance-0.916-0E9F8E)
@@ -21,6 +23,27 @@ generalised so that a voter-list attacker cannot single anyone out.
 > service and a six-screen Next.js console driven by live runs.
 
 ![Anamika Console: Command Overview](docs/console-hero.png)
+
+## Submission at a glance
+
+| Organiser requirement | Where | Verified |
+|---|---|---|
+| Public GitHub repo | this repository | public |
+| `raksha.toml` at root (team, setup, run) | [raksha.toml](raksha.toml) | `name = "anamika"`, `pip install -r requirements.txt`, `python main.py --input {input} --output {output}` |
+| `requirements.txt` | [requirements.txt](requirements.txt) | pinned, pure-Python wheels, no LLM packages; installs in about 15 s |
+| `README.md` | this file | setup, architecture, results, policy, security |
+| `config/policy.yaml` | [config/policy.yaml](config/policy.yaml) | every privacy knob; presets in `config/presets/` |
+| `main.py` | [main.py](main.py) → [backend/anamika](backend/anamika) | main execution pipeline |
+| 2-page Project Brief PDF | [Anamika_Project_Brief.pdf](Anamika_Project_Brief.pdf) | 2 A4 pages, ≥ 10 pt, measured numbers |
+| Output `sanitized/`, `report.json`, `records.jsonl` | written to `{output}` | `validate_output.py` → **CONTRACT OK** |
+| Offline, 2 CPUs, 4 GB, ≤ 15 min | tested with no network namespace, `taskset -c 0,1`, `ulimit -v 4 GB` | 1.9 s, 39 MB on 200 files; 13.9 s on 1,245 files |
+| No LLMs or transformers > 50M | rules, checksums, context and classical record linkage | **no ML model at all** |
+| Same input + secret → identical output | keyed HMAC pseudonyms and date shifts | identical; a new secret changes every pseudonym |
+| Pre-submission check | `check_submission.py --repo . --run` on a fresh clone | **READY TO SUBMIT** |
+
+Measured with the organisers' `check_dev.py` (practice data, balanced preset): **0 of 3,230** personal-data mentions visible,
+**0** canaries, **98.1%** medical values kept, linking precision / recall / F0.5 **1.00 / 0.99 / 1.00** with **0** false merges.
+On four datasets we did not tune on (new names, labels and formats): 1 of 3,291 (0.03%), F0.5 0.99, 0 false merges, 98.1% kept.
 
 ## Quickstart
 
@@ -34,7 +57,7 @@ Requirements: Python 3.10+, and for the service stack Docker (Docker Desktop on 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-RAKSHA_SECRET=practice python backend/main.py --input path/to/dev/input --output out
+RAKSHA_SECRET=practice python main.py --input path/to/dev/input --output out
 python3 path/to/validate_output.py --input path/to/dev/input --output out   # CONTRACT OK
 ```
 
@@ -45,7 +68,7 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 $env:RAKSHA_SECRET = "practice"
-python backend\main.py --input path\to\dev\input --output out
+python main.py --input path\to\dev\input --output out
 python path\to\validate_output.py --input path\to\dev\input --output out   # CONTRACT OK
 ```
 
@@ -258,7 +281,9 @@ listed here with its parameter count, and shipped in `models/`.
 
 ```
 anamika/
-├── raksha.toml            evaluator entry (python backend/main.py)
+├── raksha.toml            evaluator entry (python main.py)
+├── main.py                main execution entry → backend/anamika pipeline
+├── Anamika_Project_Brief.pdf   2-page Project Brief (source: docs/PROJECT_BRIEF.md)
 ├── requirements.txt       evaluator deps → backend/requirements.txt (exported from uv.lock)
 ├── config/policy.yaml     every privacy knob
 ├── docker-compose.yml     API + workers + Redis, hardened

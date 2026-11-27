@@ -41,3 +41,17 @@ Practice data; `tools/attacker.py` risks are ratios to raw; resistance = 1 − w
 | practice, balanced | 0 / 3230 | 0 | 1.00 / 0.99 / 1.00 | 0 | 98.1% | 34/34 | 359/359 | 274 passed |
 
 Hindi relative lines in the release: 10 of 10 now `[RELATIVE]` (before: the 3 `पति का नाम` lines carried the patient's pseudonym).
+
+### 2026-11-26 · Submission validation (evaluator conditions)
+
+Fresh clone of the public repo, fresh venv, `pip install -r requirements.txt`, no network namespace, `taskset -c 0,1`, `ulimit -v 4 GB`.
+
+| Dataset | Files | Time · peak RSS | Contract | Visible PII (check_dev) | Canaries | Medical kept | P / R / F0.5 · false merges |
+|---|---|---|---|---|---|---|---|
+| practice | 200 | 1.85 s · 39 MB | OK | 0 / 3,230 | 0 | 98.1% | 1.00 / 0.99 / 1.00 · 0 |
+| unseen-7 | 219 | 2.65 s · 39 MB | OK | 1 / 3,291 | 0 | 98.1% | 1.00 / 0.97 / 0.99 · 0 |
+| fuzz seeds 11, 23, 47 | 219 each | ~2.7 s | OK | 1 / 3,291 each | 0 | 98.1% | 1.00 / 0.97 / 0.99 · 0 |
+
+The single visible item in the untuned sets is the original file name of a quarantined binary (`output: null` per SPEC; the
+file is never exported). Our own leak scan reports 0. Python 3.10 and 3.12 releases are byte-identical.
+`check_submission.py --run`: READY TO SUBMIT.
