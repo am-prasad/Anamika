@@ -28,3 +28,8 @@ docs/stages/
 
 # local editor and assistant settings
 .claude/
+
+# internal preparation notes (kept locally, not published)
+docs/DEMO_SCRIPT.md
+docs/QA_PREP.md
+docs/TODO.md

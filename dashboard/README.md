@@ -31,4 +31,3 @@ The browser never talks to FastAPI. Route Handlers in `src/app/api/*` call it wi
 `ANAMIKA_ALLOW_ORIGINALS=true`, which production refuses. Use synthetic data only.
 
 Design tokens and screen specs: [../docs/DESIGN_SYSTEM.md](../docs/DESIGN_SYSTEM.md).
-Demo walkthrough: [../docs/DEMO_SCRIPT.md](../docs/DEMO_SCRIPT.md).
