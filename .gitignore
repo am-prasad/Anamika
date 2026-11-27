@@ -25,3 +25,6 @@ datasets/
 
 # internal stage reports (kept locally, not published)
 docs/stages/
+
+# local editor and assistant settings
+.claude/
