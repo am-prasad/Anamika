@@ -1,0 +1,6 @@
+{
+  "/api/run/route": "app/api/run/route.js",
+  "/(console)/overview/page": "app/(console)/overview/page.js",
+  "/(console)/identity/page": "app/(console)/identity/page.js",
+  "/(console)/redaction/page": "app/(console)/redaction/page.js"
+}

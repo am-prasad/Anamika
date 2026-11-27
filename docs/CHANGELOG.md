@@ -66,7 +66,7 @@
   Attack Simulator, Clinical Integrity, Security & Audit. Every number from a live FastAPI job; API key server-side only.
 - Design system (`docs/DESIGN_SYSTEM.md`): Clinical Glass tokens, offline fonts with Devanagari, validated chart palette,
   reduced-motion and no-WebGL fallbacks, an "Explain this" drawer per screen.
-- `npm run demo` starts the API and the console; `docs/DEMO_SCRIPT.md` is the five-minute walkthrough.
+- `npm run demo` starts the API and the console together.
 - Fix: relative labels ending in a bare "नाम"/"Name" (`पति का नाम`, `Husband Name`) gave the relative the patient's
   pseudonym; now `[RELATIVE]`. No score regression.
 - Fix: the job leak scan treated determinism rerun releases as side channels (47 false hits); now only their logs.
@@ -83,4 +83,4 @@
   on Python 3.10 and 3.12.
 - Verified as the evaluator runs it: fresh clone, fresh venv, `pip install -r requirements.txt`, then `check_submission.py --run`
   gives READY TO SUBMIT. With no network, 2 CPUs and a 4 GB cap: 1.9 s / 39 MB (practice), 2.7 s / 39 MB (unseen set).
-- README "Submission at a glance" table; Q&A prep at 30 questions; event-day checklist for the offline rounds.
+- README "Submission at a glance" table.

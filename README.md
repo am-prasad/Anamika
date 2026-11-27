@@ -141,8 +141,7 @@ npm run demo
 | **Clinical Integrity** | clinical values kept by kind, length of stay before and after, age-band truthfulness |
 | **Security & Audit** | leak scan per channel, byte-identical rerun, secret rotation, quarantine by SHA-256, key design |
 
-The browser never talks to the pipeline service directly: server-side route handlers hold the API key. A five-minute walkthrough
-is in [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
+The browser never talks to the pipeline service directly: server-side route handlers hold the API key.
 
 ### Run the service stack (FastAPI, workers, Redis)
 
@@ -276,7 +275,6 @@ No LLM, generative model or pretrained transformer is used anywhere, and nothing
 | [docs/API.md](docs/API.md) | the FastAPI service, security controls and scaling |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | design decisions with the alternatives considered |
 | [docs/DESIGN_SYSTEM.md](docs/DESIGN_SYSTEM.md) | the console's design system |
-| [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | the five-minute demo |
 
 ## Repository map
 

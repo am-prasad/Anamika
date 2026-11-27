@@ -25,7 +25,11 @@ datasets/
 
 # internal stage reports (kept locally, not published)
 docs/stages/
-.next/
-.env.local
-next-env.d.ts
-.gitignore
+
+# local editor and assistant settings
+.claude/
+
+# internal preparation notes (kept locally, not published)
+docs/DEMO_SCRIPT.md
+docs/QA_PREP.md
+docs/TODO.md
