@@ -7,7 +7,7 @@ Mermaid ``flowchart LR/TD`` chains (``A[Label] --> B[Label]``), drawn as box dia
 
 Usage::
 
-    python tools/md2pdf.py docs/stages/STAGE_0_recon.md docs/stages/STAGE_0_recon.pdf
+    python tools/md2pdf.py docs/PROJECT_BRIEF.md ../Anamika_Project_Brief.pdf --min-pt 10
 
 Requires ``requirements-docs.txt`` (reportlab, markdown-it-py).
 """
