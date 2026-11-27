@@ -52,4 +52,12 @@ running state and the stepper meanwhile, so never start a run live unless asked.
 - Backend down: every screen shows "The Anamika service is not reachable"; restart with `npm run demo`.
 - No WebGL on the demo machine: the hero falls back to a static figure automatically.
 - Reduced motion on: all numbers render final values, the scan line and the hero animation are skipped.
-- Screenshots of every screen are in `docs/stages/s5_screens/` as a last resort.
+- Keep screenshots of every screen on the demo laptop as a last resort.
+
+## Event-day checklist (offline rounds)
+- The day before, with internet: `cd backend && uv sync --all-extras`, `cd dashboard && npm install && npm run build`.
+- Copy the toolkit practice data to `datasets/practice/{input,truth,attacker}` at the repo root (git-ignored; or set `ANAMIKA_DATASETS_DIR`).
+- Switch Wi-Fi off and run `npm run demo` once to prove nothing needs the network. Fonts and models are local; there are no models.
+- Press **Run pipeline** before the panel arrives. Keep `Anamika_Project_Brief.pdf` and the screenshots open as backup.
+- Have one terminal ready to run the evaluator command live: `RAKSHA_SECRET=demo python main.py --input <dev/input> --output out`
+  followed by `validate_output.py`, which prints CONTRACT OK in about two seconds.

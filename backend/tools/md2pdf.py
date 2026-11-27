@@ -7,7 +7,7 @@ Mermaid ``flowchart LR/TD`` chains (``A[Label] --> B[Label]``), drawn as box dia
 
 Usage::
 
-    python tools/md2pdf.py docs/stages/STAGE_0_recon.md docs/stages/STAGE_0_recon.pdf
+    python tools/md2pdf.py docs/PROJECT_BRIEF.md ../Anamika_Project_Brief.pdf --min-pt 10
 
 Requires ``requirements-docs.txt`` (reportlab, markdown-it-py).
 """
@@ -50,7 +50,7 @@ BODY, BOLD, MONO = _fonts()
 S = {
     "h1": ParagraphStyle("h1", fontName=BOLD, fontSize=15, leading=18, textColor=NAVY,
                          spaceAfter=4),
-    "h2": ParagraphStyle("h2", fontName=BOLD, fontSize=11, leading=13.5, textColor=TEAL,
+    "h2": ParagraphStyle("h2", fontName=BOLD, fontSize=11, leading=13.5, textColor=TEAL, keepWithNext=1,
                          spaceBefore=6, spaceAfter=2),
     "h3": ParagraphStyle("h3", fontName=BOLD, fontSize=10, leading=12, textColor=NAVY,
                          spaceBefore=4, spaceAfter=1),
@@ -90,6 +90,21 @@ def inline(text: str) -> str:
     return t
 
 
+#: smallest text size in points (``--min-pt``); 0 keeps the compact report styles
+MIN_PT = 0.0
+
+
+def apply_min_pt(pt: float) -> None:
+    """Raise every text style to at least ``pt`` points (e.g. 10 for the Project Brief)."""
+    global MIN_PT
+    MIN_PT = pt
+    for st in S.values():
+        if st.fontSize < pt:
+            ratio = st.leading / st.fontSize
+            st.fontSize = pt
+            st.leading = round(pt * ratio, 1)
+
+
 def mermaid(src: str, width: float) -> Drawing:
     """Draw a simple left-to-right chain from ``A[x] --> B[y]`` lines."""
     labels: dict[str, str] = {}
@@ -114,7 +129,8 @@ def mermaid(src: str, width: float) -> Drawing:
     n = max(len(order), 1)
     box_w = min(92.0, (width - 8 * (n - 1)) / n)
     gap = (width - n * box_w) / max(n - 1, 1)
-    h = 34.0
+    fs = max(6.8, MIN_PT - 1.5)
+    h = 34.0 if fs <= 6.8 else 3 * fs * 1.32 + 8
     d = Drawing(width, h + 8)
     pos = {nid: i * (box_w + gap) for i, nid in enumerate(order)}
     for nid, x in pos.items():
@@ -123,15 +139,16 @@ def mermaid(src: str, width: float) -> Drawing:
         words = labels.get(nid, nid).replace("<br/>", " ").split()
         lines, cur = [], ""
         for w in words:
-            if len(cur) + len(w) + 1 > box_w / 4.4 and cur:
+            if len(cur) + len(w) + 1 > box_w / (fs * 0.62) and cur:
                 lines.append(cur)
                 cur = w
             else:
                 cur = (cur + " " + w).strip()
         lines.append(cur)
         for j, ln in enumerate(lines[:3]):
-            y = 4 + h / 2 + (len(lines[:3]) - 1) * 4.5 - j * 9 - 2.5
-            d.add(String(x + box_w / 2, y, ln, fontName=BODY, fontSize=6.8,
+            step = fs * 1.32
+            y = 4 + h / 2 + (len(lines[:3]) - 1) * step / 2 - j * step - fs * 0.37
+            d.add(String(x + box_w / 2, y, ln, fontName=BODY, fontSize=fs,
                          textAnchor="middle", fillColor=NAVY))
     for a, b in edges:
         if a in pos and b in pos and pos[b] > pos[a]:
@@ -234,10 +251,15 @@ def convert(md: str, out: Path) -> None:
 
 
 def main() -> int:
-    if len(sys.argv) != 3:
-        print("usage: md2pdf.py INPUT.md OUTPUT.pdf")
+    args = sys.argv[1:]
+    if "--min-pt" in args:
+        i = args.index("--min-pt")
+        apply_min_pt(float(args[i + 1]))
+        del args[i:i + 2]
+    if len(args) != 2:
+        print("usage: md2pdf.py INPUT.md OUTPUT.pdf [--min-pt 10]")
         return 2
-    convert(Path(sys.argv[1]).read_text(encoding="utf-8"), Path(sys.argv[2]))
+    convert(Path(args[0]).read_text(encoding="utf-8"), Path(args[1]))
     return 0
 
 

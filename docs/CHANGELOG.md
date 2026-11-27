@@ -72,3 +72,15 @@
 - Fix: the job leak scan treated determinism rerun releases as side channels (47 false hits); now only their logs.
 - Production build clean, screens load in under 0.4 s. Tests: 274.
 
+
+## Submission readiness (2026-11-26)
+
+- Root `main.py` (the organisers' named entry point) hands over to `backend/anamika`; `raksha.toml` runs `python main.py`.
+  Output is byte-identical to `python backend/main.py`, from any working directory.
+- `Anamika_Project_Brief.pdf`: the 2-page brief (A4, ≥ 10 pt) from `docs/PROJECT_BRIEF.md`, with measured numbers on practice
+  and on untuned data. `tools/md2pdf.py --min-pt` enforces the font floor.
+- CI (`.github/workflows/ci.yml`): the test suite, plus the organisers' `validate_output.py` and `check_submission.py --run`
+  on Python 3.10 and 3.12.
+- Verified as the evaluator runs it: fresh clone, fresh venv, `pip install -r requirements.txt`, then `check_submission.py --run`
+  gives READY TO SUBMIT. With no network, 2 CPUs and a 4 GB cap: 1.9 s / 39 MB (practice), 2.7 s / 39 MB (unseen set).
+- README "Submission at a glance" table; Q&A prep at 30 questions; event-day checklist for the offline rounds.
