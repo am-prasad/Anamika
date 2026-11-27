@@ -25,4 +25,7 @@ datasets/
 
 # internal stage reports (kept locally, not published)
 docs/stages/
-Anamika_Project_Brief.pdf
+.next/
+.env.local
+next-env.d.ts
+.gitignore
