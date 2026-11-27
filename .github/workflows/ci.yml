@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: unit tests (pipeline + API)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install (locked)
+        working-directory: backend
+        run: uv sync --frozen --all-extras
+      - name: pytest
+        working-directory: backend
+        run: uv run --frozen pytest -q -p no:warnings
+
+  evaluator:
+    name: organiser checks (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Setup exactly as raksha.toml
+        run: pip install -r requirements.txt
+      - name: Fetch the organiser toolkit (practice data and checkers)
+        run: git clone --depth 1 https://github.com/Reinforce-SST/Secret-Wards-ToolKit.git "$RUNNER_TEMP/kit"
+      - name: Run the pipeline offline-style on the practice data
+        env:
+          RAKSHA_SECRET: ci-practice
+        run: python main.py --input "$RUNNER_TEMP/kit/dev/input" --output "$RUNNER_TEMP/out"
+      - name: validate_output.py → CONTRACT OK
+        run: python "$RUNNER_TEMP/kit/validate_output.py" --input "$RUNNER_TEMP/kit/dev/input" --output "$RUNNER_TEMP/out" | tee v.txt && grep -q "CONTRACT OK" v.txt
+      - name: check_submission.py --run → READY TO SUBMIT
+        run: python "$RUNNER_TEMP/kit/check_submission.py" --repo . --run | tee c.txt && grep -q "READY TO SUBMIT" c.txt
