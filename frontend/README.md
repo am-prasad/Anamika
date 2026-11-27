@@ -1,5 +1,4 @@
-# Frontend (Next.js) — not started
+# Frontend
 
-Reserved for the Anamika console (Next.js). The frontend strategy will be agreed before
-this stage starts. It talks to the FastAPI backend (`backend/app`) over `/api/v1`
-using an `X-API-Key`, and will join `docker-compose.yml` as its own service.
+The console lives in [`../dashboard`](../dashboard) (Next.js 15). It is a demo and review
+tool only and is not part of the evaluated pipeline. Run it with `cd dashboard && npm run demo`.
